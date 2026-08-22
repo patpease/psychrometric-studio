@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    name: Web — engine and validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Verify the vendored calculation basis
+        # Runs first and fails the build if psychrolib.js has changed without a
+        # deliberate re-vendor. The calculation basis is stamped on every export;
+        # it must never drift silently.
+        run: ../scripts/vendor-psychrolib.sh
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test (includes the ASHRAE reference-value gate)
+        run: npm test
+
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Test
+        run: pytest -q

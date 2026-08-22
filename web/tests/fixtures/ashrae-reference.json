@@ -1,0 +1,106 @@
+{
+  "source": "ASHRAE Handbook — Fundamentals (2017), Chapter 1, Tables 1–3, as transcribed in the PsychroLib reference test suite (tests/js/test_psychrolib_{si,ip}.js @ master).",
+  "note": "Tolerances are relative and are NOT uniform. PsychroLib implements the Chapter 1 equations, which omit the water-vapour enhancement factor; the published tables are computed from the real-gas formulation. Saturated humidity ratio and saturated enthalpy therefore disagree with the tables by up to 2% and 3% respectively. These are upstream-documented properties of the formulation, not defects, and the tolerances below are the ones PsychroLib itself asserts.",
+  "SI": {
+    "pressure": 101325,
+    "satVapPres": {
+      "tolerance": 0.0003,
+      "comment": "Table 3. Tight agreement — this is the one saturation quantity that matches the tables closely.",
+      "points": [
+        { "tdb": -20, "expected": 103.24 },
+        { "tdb": -5, "expected": 401.74 },
+        { "tdb": 5, "expected": 872.6 },
+        { "tdb": 25, "expected": 3169.7 },
+        { "tdb": 50, "expected": 12351.3 },
+        { "tdb": 100, "expected": 101418.0 },
+        { "tdb": 150, "expected": 476101.4 }
+      ]
+    },
+    "satHumRatio": {
+      "comment": "Table 2. Per-point tolerance; the enhancement-factor omission dominates the error and grows at the extremes.",
+      "points": [
+        { "tdb": -50, "expected": 0.0000243, "tolerance": 0.01 },
+        { "tdb": -20, "expected": 0.0006373, "tolerance": 0.01 },
+        { "tdb": -5, "expected": 0.0024863, "tolerance": 0.005 },
+        { "tdb": 5, "expected": 0.005425, "tolerance": 0.005 },
+        { "tdb": 25, "expected": 0.020173, "tolerance": 0.005 },
+        { "tdb": 50, "expected": 0.086863, "tolerance": 0.01 },
+        { "tdb": 85, "expected": 0.838105, "tolerance": 0.02 }
+      ]
+    },
+    "satAirEnthalpy": {
+      "comment": "Table 2, J/kg. Agreement is rarely better than 1% and near 3% at -5 °C.",
+      "points": [
+        { "tdb": -50, "expected": -50222, "tolerance": 0.01 },
+        { "tdb": -20, "expected": -18542, "tolerance": 0.01 },
+        { "tdb": -5, "expected": 1164, "tolerance": 0.03 },
+        { "tdb": 5, "expected": 18639, "tolerance": 0.01 },
+        { "tdb": 25, "expected": 76504, "tolerance": 0.01 },
+        { "tdb": 50, "expected": 275353, "tolerance": 0.01 },
+        { "tdb": 85, "expected": 2307539, "tolerance": 0.01 }
+      ]
+    },
+    "dryAir": {
+      "comment": "Table 2.",
+      "points": [
+        { "fn": "GetDryAirEnthalpy", "args": [25], "expected": 25148, "tolerance": 0.0003 },
+        { "fn": "GetDryAirVolume", "args": [25, 101325], "expected": 0.8443, "tolerance": 0.001 }
+      ]
+    }
+  },
+  "IP": {
+    "pressure": 14.696,
+    "satVapPres": {
+      "tolerance": 0.0003,
+      "comment": "Table 3, psia.",
+      "points": [
+        { "tdb": -4, "expected": 0.014974 },
+        { "tdb": 23, "expected": 0.058268 },
+        { "tdb": 41, "expected": 0.12656 },
+        { "tdb": 77, "expected": 0.45973 },
+        { "tdb": 122, "expected": 1.7914 },
+        { "tdb": 212, "expected": 14.7094 },
+        { "tdb": 300, "expected": 67.0206 }
+      ]
+    },
+    "satHumRatio": {
+      "comment": "Table 2. Same temperatures as the SI set, expressed in °F.",
+      "points": [
+        { "tdb": -58, "expected": 0.0000243, "tolerance": 0.01 },
+        { "tdb": -4, "expected": 0.0006373, "tolerance": 0.01 },
+        { "tdb": 23, "expected": 0.0024863, "tolerance": 0.005 },
+        { "tdb": 41, "expected": 0.005425, "tolerance": 0.005 },
+        { "tdb": 77, "expected": 0.020173, "tolerance": 0.005 },
+        { "tdb": 122, "expected": 0.086863, "tolerance": 0.01 },
+        { "tdb": 185, "expected": 0.838105, "tolerance": 0.02 }
+      ]
+    },
+    "satAirEnthalpy": {
+      "comment": "Table 2, Btu/lb.",
+      "points": [
+        { "tdb": -58, "expected": -13.906, "tolerance": 0.01 },
+        { "tdb": -4, "expected": -0.286, "tolerance": 0.01 },
+        { "tdb": 23, "expected": 8.186, "tolerance": 0.03 },
+        { "tdb": 41, "expected": 15.699, "tolerance": 0.01 },
+        { "tdb": 77, "expected": 40.576, "tolerance": 0.01 },
+        { "tdb": 122, "expected": 126.066, "tolerance": 0.01 },
+        { "tdb": 185, "expected": 999.749, "tolerance": 0.01 }
+      ]
+    },
+    "dryAir": {
+      "comment": "Table 2. Formula accuracy is stated as no better than 0.1%.",
+      "points": [
+        { "fn": "GetDryAirEnthalpy", "args": [77], "expected": 18.498, "tolerance": 0.001 },
+        { "fn": "GetDryAirVolume", "args": [77, 14.696], "expected": 13.5251, "tolerance": 0.001 }
+      ]
+    },
+    "moistAir": {
+      "comment": "Cross-check of the moist-air property set at an off-standard pressure.",
+      "points": [
+        { "fn": "GetMoistAirEnthalpy", "args": [86, 0.02], "expected": 42.6168, "tolerance": 0.0003 },
+        { "fn": "GetMoistAirVolume", "args": [86, 0.02, 14.175], "expected": 14.7205749002918, "tolerance": 0.0003 },
+        { "fn": "GetMoistAirDensity", "args": [86, 0.02, 14.175], "expected": 0.0692907720594378, "tolerance": 0.0003 }
+      ]
+    }
+  }
+}

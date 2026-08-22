@@ -1,0 +1,8 @@
+{
+  "name": "psychrolib-vendored",
+  "version": "2.5.0",
+  "description": "Vendored PsychroLib 2.5.0 (UMD). See PROVENANCE.md. Wrapped as a local package so the bundler's dependency optimiser performs UMD/CJS interop, leaving psychrolib.js byte-identical to upstream.",
+  "main": "psychrolib.js",
+  "license": "MIT",
+  "private": true
+}

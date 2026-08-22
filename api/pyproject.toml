@@ -1,0 +1,28 @@
+[project]
+name = "psychro-studio-api"
+version = "0.1.0"
+description = "Report rendering and reference-oracle endpoints for Psychrometric Studio"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "reportlab>=4.2",
+    "psychrolib>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+    # The comfort reference oracle. Not used by the running application — the
+    # browser evaluates comfort live via jsthermalcomfort — but used in CI to
+    # cross-check that JS implementation against its validated Python origin.
+    "pythermalcomfort>=2.10",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
