@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Pease Studio">
+  <title>Pease Studio</title>
+  <rect width="1024" height="1024" rx="232" fill="#08302A"/>
+
+  <!-- Baseline -->
+  <path d="M225 786 H795" stroke="#8A9E9A" stroke-width="42" stroke-linecap="round" fill="none"/>
+
+  <!-- Where the curve settles onto the baseline, lightened -->
+  <path d="M218 776 H338" stroke="#A5DEC3" stroke-width="40" stroke-linecap="round" fill="none"/>
+
+  <!-- The performance curve -->
+  <path d="M197 757 C 300 757 432 742 500 562 C 546 440 566 330 583 250"
+        stroke="#3BBE7E" stroke-width="62" stroke-linecap="round" fill="none"/>
+
+  <circle cx="672" cy="558" r="79" fill="#2E80C4"/>
+</svg>

@@ -16,7 +16,8 @@
   --border: #d9dee5;
   --ink: #14202b;
   --ink-muted: #5d6b7a;
-  --accent: #0f6fbe;
+  --accent: #0F5F52;
+  --accent-bright: #3FC98A;
 
   --plot-bg: #ffffff;
   --grid: #eceff3;
@@ -39,7 +40,10 @@
     --border: #2a3543;
     --ink: #e6ecf3;
     --ink-muted: #93a1b1;
-    --accent: #58a9f0;
+    /* The identity green is too dark to read on a dark surface; the bright
+       green from the mark's bottom rule carries the accent role instead. */
+    --accent: #3FC98A;
+    --accent-bright: #6FE0AC;
 
     --plot-bg: #141a21;
     --grid: #202934;
@@ -93,21 +97,49 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 400;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.brand-mark {
+  display: block;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.brand-strapline {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
-.app-header h1 strong {
-  color: var(--ink);
-  font-weight: 600;
+.brand-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.25rem;
+  background: var(--border);
 }
 
-.tagline {
-  margin: 0.15rem 0 0;
-  font-size: 0.8rem;
+.app-header h1 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
   color: var(--ink-muted);
 }
 
@@ -130,7 +162,8 @@ body {
 
 .unit-toggle button.active {
   background: var(--accent);
-  color: #fff;
+  /* The dark-theme accent is a light green, so white text would vanish on it. */
+  color: var(--surface);
 }
 
 /* ------------------------------------------------------------------ body */

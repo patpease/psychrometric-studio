@@ -25,6 +25,7 @@ import {
 import { LABELS, type UnitSystem } from '../psych/units.js';
 import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
+import { BrandMark } from './BrandMark.js';
 import {
   formatTemperature,
   formatHumidityRatio,
@@ -110,11 +111,14 @@ export function App(): React.JSX.Element {
   return (
     <div className="app">
       <header className="app-header">
-        <div>
-          <h1>
-            {BRAND.organisation} <strong>{BRAND.appName}</strong>
-          </h1>
-          <p className="tagline">{BRAND.tagline}</p>
+        <div className="brand">
+          <BrandMark size={30} />
+          <div className="brand-text">
+            <span className="brand-name">{BRAND.organisation}</span>
+            <span className="brand-strapline">{BRAND.strapline}</span>
+          </div>
+          <span className="brand-divider" aria-hidden="true" />
+          <h1>{BRAND.appName}</h1>
         </div>
         <div className="unit-toggle" role="group" aria-label="Unit system">
           {(['IP', 'SI'] as UnitSystem[]).map((system) => (

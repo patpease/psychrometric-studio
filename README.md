@@ -105,5 +105,7 @@ PsychroLib is MIT — see `web/vendor/psychrolib.LICENSE.txt`. ASHRAE standards
 are copyrighted; this project implements published equations and does not
 reproduce tables or text.
 
-Branding is currently a **placeholder** (`Pease Engineering`) pending a decision;
-it is confined to `web/src/config/branding.ts`.
+Branding is **Pease Studio**, confined to `web/src/config/branding.ts`, the mark
+in `web/src/ui/BrandMark.tsx`, and the app icon at `web/public/icon.svg`. The
+identity artwork was supplied as raster images and reproduced as SVG; drop the
+original files into `web/public/` to swap them back.

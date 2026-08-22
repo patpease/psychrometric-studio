@@ -540,11 +540,21 @@ worth reaching early.
 
 *Closed 2026-08-22.*
 
-1. **Branding — open, placeholder in place.** All branded surfaces (PDF report
-   header/footer, app chrome, export stamps) read from a single branding config.
-   The placeholder identity is **Pease Engineering**. Nothing is hard-coded, so
-   swapping or genericising the brand later is a one-file change. See
-   `web/src/config/branding.ts`.
+1. **Branding — resolved to Pease Studio (2026-08-22).** All branded surfaces
+   (PDF report header/footer, app chrome, export stamps) read from a single
+   branding config, `web/src/config/branding.ts`. The identity is **Pease
+   Studio**, strapline *Tools for building performance*; the stacked-bar mark is
+   `web/src/ui/BrandMark.tsx` and the app icon is `web/public/icon.svg`, both
+   reproduced as SVG from the supplied artwork.
+
+   One naming call was made: the project is "Psychrometric Studio", which under
+   this identity reads "Pease Studio Psychrometric Studio". The *displayed* app
+   name is therefore **Psychrometrics**; the project name in the docs is
+   unchanged. It is one string in the branding config if you want it different.
+
+   The open question about publishing an engineering calculator publicly under a
+   firm's name — professional indemnity, disclaimer language — still stands, and
+   is now more pointed rather than less. The disclaimer (decision 4) is in place.
 2. **Desiccant — isenthalpic idealisation.** Adsorption follows a constant-
    enthalpy line. Ships in Phase 4 **explicitly labelled as an idealisation** in
    the UI and on every export; the Banks/Jurinak F1/F2 characteristic-potential

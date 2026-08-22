@@ -13,15 +13,24 @@ import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 export const APP_VERSION = '0.1.0';
 
 export const BRAND = {
-  /** Placeholder identity. Not yet a final branding decision. */
-  organisation: 'Pease Engineering',
-  appName: 'Psychrometric Studio',
+  organisation: 'Pease Studio',
+  /** Sits under the organisation name in the header lockup. */
+  strapline: 'Tools for building performance',
+  /**
+   * The tool's own name.
+   *
+   * Note: the repository and plan call the project "Psychrometric Studio".
+   * Under the Pease Studio identity that lockup reads "Pease Studio
+   * Psychrometric Studio", so the *displayed* name is shortened here. The
+   * project name in the docs is unchanged; only this string is user-facing.
+   */
+  appName: 'Psychrometrics',
   tagline: 'Psychrometric analysis, process modelling, and thermal comfort',
-  /** Path to a logo asset, or null for a wordmark. */
-  logo: null as string | null,
   colours: {
-    accent: '#0f6fbe',
-    ink: '#14202b',
+    /** Pease Studio greens, taken from the identity artwork. */
+    accent: '#0F5F52',
+    accentBright: '#3FC98A',
+    ink: '#0C2A24',
   },
 } as const;
 
@@ -61,7 +70,7 @@ export interface ProvenanceStamp {
 
 export function provenanceStamp(now: Date = new Date()): ProvenanceStamp {
   return {
-    application: `${BRAND.organisation} ${BRAND.appName}`,
+    application: `${BRAND.organisation} — ${BRAND.appName}`,
     version: APP_VERSION,
     calculationBasis: CALCULATION_BASIS.reference,
     libraryVersion: `${CALCULATION_BASIS.library} ${CALCULATION_BASIS.version}`,
