@@ -509,7 +509,7 @@ Accuracy is the product. Testing is not an afterthought here.
 |---|---|---|
 | 0 | Repo, project schema, CI, unit system, State engine | ✅ **Complete** — 101 tests passing; see §14 |
 | 1 | Chart engine — all line families, both unit systems, altitude, zoom/pan/hover | ✅ **Complete** — matches ASHRAE Chart No. 1 at 80/67; see §15 |
-| 2 | State points and core process chain, loads, drag interaction | Energy balance closes; hand calcs match |
+| 2 | State points and core process chain, loads, drag interaction | ✅ **Complete** — balance closes on four chains; see §16 |
 | 3 | Comfort module — PMV/PPD, polygon, adaptive chart | Matches CBE tool output for identical inputs |
 | 4 | Coil detail, energy recovery, advanced processes | No-ADP and balance guards proven |
 | 5 | EPW import, scatter, density bins, hours-in-zone | 8,760 points pan at 60 fps |
@@ -710,3 +710,72 @@ property.
   it rather than re-deriving the relation.
 - The protractor is drawn at a fixed size in the upper-left. Once process lines
   exist, it should become draggable so it can be aligned against one.
+
+
+---
+
+## 16. Phase 2 outcome
+
+*Completed 2026-08-22. 249 tests passing, type check clean, verified in browser.*
+
+Delivered: the eight core process models, the chain solver with mass-flow
+propagation and cross-stream couplings, duty accounting, the equipment-chain
+editor, the process overlay on the chart, a results panel, and drag interaction.
+
+### The gate
+
+**Energy balance closes on four independent chains** — cool-and-reheat, mixed
+air with humidification, evaporative cooling, and a full mixed-air chain — in
+both unit systems, to a relative residual below 1e-9. Mixing makes this a real
+test rather than a tautology: mass flow changes mid-chain, so the second stream
+has to be counted as energy in at its own mass flow or the sum does not close.
+
+Every process is also checked against a hand calculation, with the arithmetic
+worked in the test comments.
+
+### Findings
+
+1. **A clamped coil silently delivered more than it was asked for.** Requesting
+   120 MBH at SHR 0.7 on 95 °F / 40% air drives the leaving state past the
+   saturation curve. The state clamps correctly — but the *duty* then no longer
+   matches the request, and the coil quietly delivered 131 MBH. The stage now
+   compares delivered against requested and says so, naming the SHR as the
+   thing to change. Three of the first test failures were this, not arithmetic.
+
+2. **Only entering-air points are draggable, and that is psychrometrics rather
+   than a limitation.** A source is an input — two free variables the user
+   chose. Every downstream point is an *output*. Dragging one would force the
+   tool to silently pick which parameter to invert (the coil's leaving
+   temperature? its capacity? its SHR?), and any choice would put words in the
+   engineer's mouth. Downstream states are edited through their parameters,
+   where the intent is explicit. Recorded in `ProcessOverlay`.
+
+3. **Adiabatic humidification cannot be drawn as a straight line.** It follows
+   the constant wet-bulb line, which is curved; a straight chord cuts below it
+   and implies the air was drier on the way than it was. The overlay traces the
+   actual wet-bulb path. Cooling is drawn straight, which is conventional — the
+   true bend toward the apparatus dew point is the Phase 4 construction.
+
+4. **Two duty conventions had to be pinned down.** Sensible duty is defined
+   through *enthalpy at the entering humidity ratio*, not `m·cp·ΔT`: it keeps
+   the split consistent with the total to machine precision and works unchanged
+   in Btu/lb and J/kg. And moisture rate is reported per hour in both systems,
+   even though SI mass flow is per second, because a humidifier rate quoted per
+   second is useless to a designer. Both carried over from bh-psych.
+
+5. **Reheating to a temperature below the off-coil condition is a second
+   cooling stage wearing a heating coil's name.** It surfaced as a test failure
+   where the "cooling total" exceeded the coil capacity. The solver is right to
+   report it as negative duty; the lesson is that stage *names* carry no
+   physical meaning and the totals must follow the sign, which they do.
+
+### Carried into Phase 3
+
+- The chain solver orders airstreams topologically and reports cycles rather
+  than looping. Wrap-around coils (Phase 4) genuinely close a loop and will need
+  simultaneous solution — the error message already says so.
+- `splitDuty` / `applyDuty` are exact inverses and tested as such; the coil ADP
+  construction should build on them rather than introduce a third path.
+- The comfort polygon needs the same "recompute everything on every edit"
+  treatment the chain got: it is cheap enough, and it removes a whole class of
+  stale-state bug.

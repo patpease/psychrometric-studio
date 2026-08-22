@@ -5,7 +5,7 @@
  * layout reserves the right-hand column for them so that adding a panel does
  * not become a re-layout.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart } from '../chart/render.js';
 import { useChartInteraction } from '../chart/interact.js';
 import {
@@ -23,9 +23,13 @@ import {
   type Atmosphere,
 } from '../psych/atmosphere.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
+import { fromTdbW, saturationHumidityRatio } from '../psych/state.js';
 import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
-import { BrandMark } from './BrandMark.js';
+import { ChainEditor } from './ChainEditor.js';
+import { ResultsPanel } from './ResultsPanel.js';
+import { solveProject } from '../processes/chain.js';
+import type { Stage } from '../types/project.js';
 import {
   formatTemperature,
   formatHumidityRatio,
@@ -38,6 +42,24 @@ import {
 } from './format.js';
 
 type PressureMode = 'sea-level' | 'altitude' | 'explicit';
+
+/**
+ * The system shown on first load: a single-zone cooling application with
+ * outdoor and return air mixed, a coil, fan heat, and a space load. It exists
+ * so the tool opens showing what it does rather than an empty chart.
+ */
+const STARTER_SYSTEM: Stage[] = [
+  { id: 'oa', type: 'source', name: 'Outdoor air', airflow: 800, params: { tdb: 95, rh: 0.4 } },
+  {
+    id: 'mx',
+    type: 'mixing',
+    name: 'Mixing box',
+    params: { airflow2: 1600, tdb2: 75, rh2: 0.5 },
+  },
+  { id: 'cc', type: 'cooling', name: 'Cooling coil', params: { tdbOut: 54, rhOut: 0.93 } },
+  { id: 'sf', type: 'fan', name: 'Supply fan', params: { power: 2, motorInAirstream: true } },
+  { id: 'rm', type: 'room', name: 'Zone', params: { sensible: 42, latent: 11 } },
+];
 
 /** Track the element's size so the chart fills the space it is given. */
 function useElementSize(): [React.RefObject<HTMLDivElement | null>, { width: number; height: number }] {
@@ -68,6 +90,8 @@ export function App(): React.JSX.Element {
   const [explicitPressure, setExplicitPressure] = useState('');
   const [visibility, setVisibility] = useState<Record<FamilyKey, boolean>>(DEFAULT_VISIBILITY);
   const [showProtractor, setShowProtractor] = useState(false);
+  const [stages, setStages] = useState<Stage[]>(() => STARTER_SYSTEM);
+  const [selectedStage, setSelectedStage] = useState<number | null>(null);
 
   const [sizeRef, size] = useElementSize();
   const limits = useMemo(() => domainLimits(units), [units]);
@@ -94,6 +118,58 @@ export function App(): React.JSX.Element {
     setDomain(defaultDomain(next));
   };
 
+  /**
+   * The whole chain re-solves on every edit. It is a handful of closed-form
+   * evaluations per stage, so this is cheaper than tracking which stages went
+   * stale — and it means a change can never leave a downstream state showing a
+   * value from before the edit.
+   */
+  const solved = useMemo(
+    () =>
+      solveProject(
+        {
+          schemaVersion: 1,
+          units,
+          atmosphere: { basis: 'standard' },
+          airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages }],
+        },
+        atmosphere.pressure,
+        units,
+      ),
+    [stages, units, atmosphere.pressure],
+  );
+
+  const supply = solved.airstreams[0]!;
+
+  /**
+   * Drag an entering-air point to a new condition.
+   *
+   * The dragged position is written back as dry bulb and relative humidity,
+   * which is how the state is stored — so the chain re-solves from the user's
+   * declared intent rather than from a pair of pixel coordinates. Dragging above
+   * the saturation curve is refused outright: there is no such air.
+   */
+  const dragSource = useCallback(
+    (index: number, tdb: number, w: number) => {
+      setStages((current) => {
+        const stage = current[index];
+        if (!stage || stage.type !== 'source') return current;
+
+        const wSat = saturationHumidityRatio(tdb, atmosphere.pressure, units);
+        if (w > wSat || w < 0) return current;
+
+        const state = fromTdbW(tdb, w, atmosphere.pressure, units);
+        const copy = [...current];
+        copy[index] = {
+          ...stage,
+          params: { ...(stage.params ?? {}), tdb: Number(tdb.toFixed(2)), rh: state.rh },
+        };
+        return copy;
+      });
+    },
+    [atmosphere.pressure, units],
+  );
+
   const interaction = useChartInteraction({
     domain,
     limits,
@@ -112,13 +188,17 @@ export function App(): React.JSX.Element {
     <div className="app">
       <header className="app-header">
         <div className="brand">
-          <BrandMark size={30} />
+          {/* Two sources so the tile follows the theme; the browser picks one
+              and never downloads the other. */}
+          <picture>
+            <source srcSet={BRAND.icon.dark} media="(prefers-color-scheme: dark)" />
+            <img className="brand-icon" src={BRAND.icon.light} alt="" width={38} height={38} />
+          </picture>
           <div className="brand-text">
-            <span className="brand-name">{BRAND.organisation}</span>
-            <span className="brand-strapline">{BRAND.strapline}</span>
+            <span className="brand-org">{BRAND.organisation}</span>
+            <h1>{BRAND.appName}</h1>
+            <span className="brand-tagline">{BRAND.tagline}</span>
           </div>
-          <span className="brand-divider" aria-hidden="true" />
-          <h1>{BRAND.appName}</h1>
         </div>
         <div className="unit-toggle" role="group" aria-label="Unit system">
           {(['IP', 'SI'] as UnitSystem[]).map((system) => (
@@ -136,6 +216,17 @@ export function App(): React.JSX.Element {
       </header>
 
       <main className="app-body">
+        <aside className="panel panel-left">
+          <ChainEditor
+            stages={stages}
+            solved={supply.stages}
+            units={units}
+            selected={selectedStage}
+            onSelect={setSelectedStage}
+            onChange={setStages}
+          />
+        </aside>
+
         <div
           className={`chart-pane${interaction.panning ? ' panning' : ''}`}
           ref={(node) => {
@@ -156,11 +247,22 @@ export function App(): React.JSX.Element {
             visibility={visibility}
             showProtractor={showProtractor}
             hover={hover}
+            solved={supply}
+            selectedStage={selectedStage}
+            onSelectStage={setSelectedStage}
+            onDragState={dragSource}
           />
           <p className="chart-hint">Scroll to zoom · drag to pan</p>
         </div>
 
-        <aside className="panel">
+        <aside className="panel panel-right">
+          <ResultsPanel
+            solved={supply}
+            units={units}
+            selected={selectedStage}
+            onSelect={setSelectedStage}
+          />
+
           <section>
             <h2>Condition at cursor</h2>
             {hover ? (

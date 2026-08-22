@@ -13,19 +13,19 @@ import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 export const APP_VERSION = '0.1.0';
 
 export const BRAND = {
+  /** The parent identity, shown as an endorsement above the product name. */
   organisation: 'Pease Studio',
-  /** Sits under the organisation name in the header lockup. */
-  strapline: 'Tools for building performance',
+  appName: 'Psychrometric Studio',
+  tagline: 'Moist-air analysis for real buildings',
   /**
-   * The tool's own name.
-   *
-   * Note: the repository and plan call the project "Psychrometric Studio".
-   * Under the Pease Studio identity that lockup reads "Pease Studio
-   * Psychrometric Studio", so the *displayed* name is shortened here. The
-   * project name in the docs is unchanged; only this string is user-facing.
+   * The app icon, as a self-contained tile. Two variants because the tile
+   * inverts between themes — a dark tile on a light page, a light tile on a
+   * dark one — which is how the supplied artwork is drawn.
    */
-  appName: 'Psychrometrics',
-  tagline: 'Psychrometric analysis, process modelling, and thermal comfort',
+  icon: {
+    light: '/brand/psychrometric-studio-icon-512.png',
+    dark: '/brand/psychrometric-studio-icon-512-light.png',
+  },
   colours: {
     /** Pease Studio greens, taken from the identity artwork. */
     accent: '#0F5F52',
@@ -70,7 +70,7 @@ export interface ProvenanceStamp {
 
 export function provenanceStamp(now: Date = new Date()): ProvenanceStamp {
   return {
-    application: `${BRAND.organisation} — ${BRAND.appName}`,
+    application: `${BRAND.appName} — ${BRAND.organisation}`,
     version: APP_VERSION,
     calculationBasis: CALCULATION_BASIS.reference,
     libraryVersion: `${CALCULATION_BASIS.library} ${CALCULATION_BASIS.version}`,

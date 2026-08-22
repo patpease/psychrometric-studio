@@ -8,7 +8,7 @@
  * emitting SVG directly means vector export in Phase 7 is a DOM serialisation
  * rather than a second rendering path.
  */
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import type { ChartDomain, ChartScales, DataPoint } from './scales.js';
 import { createScales, niceTicks } from './scales.js';
 import {
@@ -25,6 +25,8 @@ import {
 import { FAMILY_STYLES, DRAW_ORDER } from './theme.js';
 import { protractorRays } from './protractor.js';
 import { humidityRatioToDisplay, LABELS, type UnitSystem } from '../psych/units.js';
+import { ProcessOverlay, ProcessArrowMarker } from './ProcessOverlay.js';
+import type { SolvedAirstream } from '../processes/chain.js';
 import { formatTemperature, lineLabel } from '../ui/format.js';
 import type { MoistAirState } from '../psych/state.js';
 
@@ -38,6 +40,11 @@ export interface ChartProps {
   showProtractor: boolean;
   /** State under the cursor, or null when the pointer is off-chart. */
   hover: MoistAirState | null;
+  /** The solved process chain to draw over the chart, if any. */
+  solved?: SolvedAirstream | undefined;
+  selectedStage?: number | null;
+  onSelectStage?: (index: number | null) => void;
+  onDragState?: ((stageIndex: number, tdb: number, w: number) => void) | undefined;
 }
 
 /** Build an SVG path from points in psychrometric space. */
@@ -167,7 +174,12 @@ export function Chart({
   visibility,
   showProtractor,
   hover,
+  solved,
+  selectedStage = null,
+  onSelectStage,
+  onDragState,
 }: ChartProps): React.JSX.Element {
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const scales = useMemo(() => createScales(domain, width, height), [domain, width, height]);
 
   /**
@@ -217,8 +229,20 @@ export function Chart({
 
   const hoverPoint = hover ? scales.project(hover.tdb, hover.w) : null;
 
+  /** Client pixels to psychrometric space, for dragging state points. */
+  const toData = useCallback(
+    (clientX: number, clientY: number) => {
+      const element = svgRef.current;
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return scales.invert(clientX - rect.left, clientY - rect.top);
+    },
+    [scales],
+  );
+
   return (
     <svg
+      ref={svgRef}
       className="psych-chart"
       width={width}
       height={height}
@@ -232,6 +256,7 @@ export function Chart({
         <clipPath id="plot-clip">
           <rect x={plotLeft} y={plotTop} width={scales.plotWidth} height={scales.plotHeight} />
         </clipPath>
+        <ProcessArrowMarker />
       </defs>
 
       <rect
@@ -258,6 +283,18 @@ export function Chart({
         {DRAW_ORDER.filter((family) => visibility[family]).map((family) => (
           <LineFamily key={family} family={family} lines={families[family]} scales={scales} />
         ))}
+
+        {solved && (
+          <ProcessOverlay
+            solved={solved}
+            scales={scales}
+            pressure={pressure}
+            selected={selectedStage}
+            onSelect={onSelectStage ?? (() => undefined)}
+            onDragState={onDragState}
+            toData={toData}
+          />
+        )}
 
         {hoverPoint && (
           <g className="hover-marker">

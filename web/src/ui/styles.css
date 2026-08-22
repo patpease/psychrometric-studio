@@ -31,6 +31,17 @@
   --family-dewpoint: #8a94a1;
 
   --hover: #d1345b;
+
+  --process: #1F7A6B;
+  --process-selected: #C2610A;
+  --warn: #B4690E;
+  --warn-ink: #7A4708;
+  --warn-bg: #FDF3E3;
+  --danger: #B3261E;
+  --danger-bg: #FCEBEA;
+  --ok-ink: #1F6E4E;
+  --ok-bg: #E8F6EE;
+  --selected-bg: #E9F2EF;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,6 +69,17 @@
     --family-dewpoint: #8d99a8;
 
     --hover: #ff7a96;
+
+    --process: #45C7B3;
+    --process-selected: #F0A355;
+    --warn: #E0A050;
+    --warn-ink: #F0C48A;
+    --warn-bg: #33270F;
+    --danger: #F08078;
+    --danger-bg: #34191A;
+    --ok-ink: #7EDCAB;
+    --ok-bg: #12291F;
+    --selected-bg: #1D2A31;
   }
 }
 
@@ -103,44 +125,37 @@ body {
   gap: 0.7rem;
 }
 
-.brand-mark {
+.brand-icon {
   display: block;
   flex-shrink: 0;
+  border-radius: 9px;
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
-.brand-name {
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: var(--ink);
-}
-
-.brand-strapline {
+.brand-org {
   font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.11em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
 
-.brand-divider {
-  width: 1px;
-  align-self: stretch;
-  margin: 0.1rem 0.25rem;
-  background: var(--border);
+.brand-tagline {
+  font-size: 0.72rem;
+  color: var(--ink-muted);
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--ink-muted);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
 }
 
 .unit-toggle {
@@ -444,4 +459,357 @@ body {
     border-left: 0;
     border-top: 1px solid var(--border);
   }
+}
+
+/* ------------------------------------------------- process chain on chart */
+
+.process-line {
+  fill: none;
+  stroke: var(--process);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.process-line.selected {
+  stroke: var(--process-selected);
+  stroke-width: 3.25;
+}
+
+.process-arrowhead {
+  fill: var(--process);
+}
+
+.process-auxiliary line {
+  stroke: var(--process);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+
+.process-auxiliary circle {
+  fill: var(--plot-bg);
+  stroke: var(--process);
+  stroke-width: 1.5;
+}
+
+.process-point {
+  cursor: pointer;
+}
+
+.process-point circle {
+  fill: var(--process);
+  stroke: var(--plot-bg);
+  stroke-width: 2;
+}
+
+.process-point text {
+  font-size: 8.5px;
+  font-weight: 700;
+  fill: var(--plot-bg);
+  pointer-events: none;
+}
+
+.process-point.selected circle {
+  fill: var(--process-selected);
+}
+
+.process-point.warned circle {
+  stroke: var(--warn);
+  stroke-width: 2.5;
+}
+
+/* ------------------------------------------------------------ chain editor */
+
+.panel-left {
+  width: 17.5rem;
+  border-left: 0;
+  border-right: 1px solid var(--border);
+}
+
+.panel-right {
+  width: 21rem;
+}
+
+.chain {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.stage {
+  margin-bottom: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.stage.selected {
+  border-color: var(--accent);
+}
+
+.stage.errored {
+  border-color: var(--danger);
+}
+
+.stage-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stage-head:hover {
+  background: var(--bg);
+}
+
+.stage-number,
+.row-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--process);
+  color: var(--plot-bg);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.row-number {
+  margin-right: 0.4rem;
+}
+
+.stage.selected .stage-number {
+  background: var(--process-selected);
+}
+
+.stage-name {
+  flex: 1;
+}
+
+.stage-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.stage-badge.error {
+  background: var(--danger);
+}
+
+.stage-badge.warn {
+  background: var(--warn);
+}
+
+.stage-body {
+  padding: 0.5rem 0.55rem 0.6rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.stage-summary,
+.stage-alt {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.stage-alt {
+  font-style: italic;
+}
+
+.param {
+  margin-bottom: 0.4rem;
+}
+
+.param label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.param-unit {
+  font-size: 0.68rem;
+  opacity: 0.75;
+}
+
+.param input[type='number'] {
+  width: 100%;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.param-boolean label {
+  justify-content: flex-start;
+  gap: 0.4rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.param-help {
+  margin: 0.15rem 0 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+.stage-error,
+.stage-warning {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.stage-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.stage-warning {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.stage-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+
+.stage-actions button {
+  flex: 1;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.stage-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stage-actions button.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.chain-add label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+
+.chain-add select {
+  width: 100%;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* ---------------------------------------------------------------- results */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.results {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.73rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.results th,
+.results td {
+  padding: 0.22rem 0.3rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.results thead th {
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.results tbody th {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  font-weight: 400;
+}
+
+.results tbody tr {
+  cursor: pointer;
+}
+
+.results tbody tr:hover {
+  background: var(--bg);
+}
+
+.results tbody tr.selected {
+  background: var(--selected-bg);
+}
+
+.table-units {
+  margin: 0.3rem 0 0;
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+}
+
+.balance {
+  margin: 0.6rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+
+.balance.failed {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.process-point.draggable {
+  cursor: grab;
+}
+
+.process-point.draggable:active {
+  cursor: grabbing;
 }

@@ -14,16 +14,17 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 1 complete** — an interactive psychrometric chart in both unit systems,
-at any site pressure, verified against ASHRAE Chart No. 1. Process modelling is
-Phase 2. See [PLAN.md](PLAN.md) for the full roadmap.
+**Phase 2 complete** — an interactive psychrometric chart plus a solved
+equipment chain: mixing, coils, humidifiers, fan heat, and room loads, with
+duties, system totals, and a verified energy balance. Thermal comfort is
+Phase 3. See [PLAN.md](PLAN.md) for the full roadmap.
 
 | Phase | Deliverable | Status |
 |---|---|---|
 | 0 | Repo, project schema, CI, unit system, state engine | ✅ done |
 | 1 | Chart engine — all line families, both unit systems, zoom/pan/hover | ✅ done |
-| 2 | State points and core process chain | next |
-| 3 | Comfort module — PMV/PPD, comfort polygon, adaptive | |
+| 2 | State points and core process chain | ✅ done |
+| 3 | Comfort module — PMV/PPD, comfort polygon, adaptive | next |
 | 4 | Coil detail, energy recovery, advanced processes | |
 | 5 | EPW import, scatter, density bins, hours-in-zone | |
 | 6 | Education — walkthrough engine and content | |
@@ -35,6 +36,8 @@ Phase 2. See [PLAN.md](PLAN.md) for the full roadmap.
 ```
 web/       Vite + TypeScript front end — owns every interactive calculation
   src/psych/     unit-aware state engine over PsychroLib
+  src/chart/     scales, line families, SVG renderer, process overlay
+  src/processes/ process models, chain solver, duty accounting
   src/config/    branding and legal text (single source of truth)
   src/types/     project file types, mirroring the JSON Schema
   vendor/        vendored PsychroLib + provenance
