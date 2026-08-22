@@ -111,13 +111,41 @@ Values are stored in PsychroLib's native units and converted only for display.
 | Mass flow | lb/**h** | lb/h | kg/**s** | kg/s |
 | Duty | MBH | MBH | kW | kW |
 
-Two traps, both encoded in `units.ts` and tested:
+Three traps, all encoded in `units.ts` and tested:
 
 1. **PsychroLib SI enthalpy is J/kg, not kJ/kg.** A state at 24 °C / 50% RH
    returns roughly 47,000, not 47.
 2. **Mass flow has a different time base in each system** — per hour in IP, per
    second in SI. This is conventional in each and is preserved deliberately;
    every downstream formula and label assumes it.
+3. **Enthalpy does not convert between systems, because the datums differ.**
+   See below — this is the one most likely to be reported as a bug.
+
+### Enthalpy has a different zero in each system
+
+IP moist-air enthalpy is referenced to **0 °F**; SI enthalpy is referenced to
+**0 °C**. The scales are therefore *offset* as well as scaled, and no single
+multiplier converts one to the other.
+
+The same air — 80 °F / 51.2% RH at sea level — reads:
+
+| | IP | SI |
+|---|---|---|
+| Dry bulb | 80.0 °F | 26.7 °C |
+| Wet bulb | 67.0 °F | 19.5 °C |
+| Humidity ratio | 78.4 gr/lb | 11.20 g/kg |
+| Specific volume | 13.850 ft³/lb | 0.8646 m³/kg |
+| **Enthalpy** | **31.48 Btu/lb** | **55.39 kJ/kg** |
+
+Every row converts except the last. A naive 31.48 × 2.326 gives 73.2 kJ/kg, not
+55.39 — the 17.8 kJ/kg gap is exactly `cp × 32 °F` expressed in kelvin
+(1.006 × 17.78 = 17.9), the dry-air enthalpy of the datum offset.
+
+So **switching unit systems in the application changes the enthalpy reading by
+more than a unit conversion.** That is correct, and both values are right. Only
+enthalpy *differences* — which is what every duty and load calculation actually
+uses — are system-independent once converted, which is why this never affects a
+result. The relationship is pinned in `tests/units.test.ts`.
 
 ## 6. Sign conventions
 

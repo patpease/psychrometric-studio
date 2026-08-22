@@ -1,0 +1,414 @@
+/**
+ * Application styling.
+ *
+ * The palette is defined as custom properties in both themes so the chart
+ * renderer never needs to know which is active — it emits `var(--family-*)` and
+ * the theme resolves it. Family hues are categorical, not a ramp: five
+ * overlapping line families have to stay distinguishable from one another, and
+ * a sequential scale would make neighbouring families read as related.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #d9dee5;
+  --ink: #14202b;
+  --ink-muted: #5d6b7a;
+  --accent: #0f6fbe;
+
+  --plot-bg: #ffffff;
+  --grid: #eceff3;
+  --frame: #9aa6b4;
+
+  --family-saturation: #16324f;
+  --family-rh: #2f7fd1;
+  --family-wetbulb: #0f8a7a;
+  --family-enthalpy: #c2610a;
+  --family-volume: #7a4bbd;
+  --family-dewpoint: #8a94a1;
+
+  --hover: #d1345b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10151b;
+    --surface: #171e26;
+    --border: #2a3543;
+    --ink: #e6ecf3;
+    --ink-muted: #93a1b1;
+    --accent: #58a9f0;
+
+    --plot-bg: #141a21;
+    --grid: #202934;
+    --frame: #4a5766;
+
+    /* Lifted and desaturated for legibility on a dark plot without vibrating. */
+    --family-saturation: #cfe0f0;
+    --family-rh: #6cb0ee;
+    --family-wetbulb: #45c7b3;
+    --family-enthalpy: #f0a355;
+    --family-volume: #b18bea;
+    --family-dewpoint: #8d99a8;
+
+    --hover: #ff7a96;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.app-header h1 strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tagline {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+.unit-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.unit-toggle button {
+  padding: 0.4rem 0.9rem;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.unit-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ body */
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chart-pane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  /* Without min-height a flex child is sized by its content, so the SVG would
+     push the pane taller than the viewport and the chart would scroll out of
+     view instead of fitting. overflow guards the ResizeObserver against
+     feeding its own growth back in. */
+  min-height: 0;
+  overflow: hidden;
+  /* The chart is grabbable for panning; the cursor is the only affordance. */
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.chart-pane.panning {
+  cursor: grabbing;
+}
+
+.chart-hint {
+  position: absolute;
+  left: 1.5rem;
+  bottom: 0.35rem;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.psych-chart {
+  display: block;
+}
+
+/* ----------------------------------------------------------------- chart */
+
+.plot-background {
+  fill: var(--plot-bg);
+}
+
+.plot-frame {
+  fill: none;
+  stroke: var(--frame);
+  stroke-width: 1;
+}
+
+.gridlines line {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.line-label {
+  font-size: 9px;
+  paint-order: stroke;
+  stroke: var(--plot-bg);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}
+
+.axis line {
+  stroke: var(--frame);
+  stroke-width: 1;
+}
+
+.axis text {
+  font-size: 10px;
+  fill: var(--ink-muted);
+}
+
+.axis-title {
+  font-size: 11px;
+  fill: var(--ink);
+}
+
+.hover-marker line {
+  stroke: var(--hover);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.hover-marker circle {
+  fill: var(--hover);
+  stroke: var(--plot-bg);
+  stroke-width: 1.5;
+}
+
+.protractor-face {
+  fill: var(--plot-bg);
+  fill-opacity: 0.85;
+  stroke: var(--frame);
+  stroke-width: 1;
+}
+
+.protractor-hub {
+  fill: var(--ink);
+}
+
+.protractor-ray {
+  stroke: var(--ink-muted);
+  stroke-width: 0.75;
+}
+
+.protractor-label {
+  font-size: 8px;
+  fill: var(--ink-muted);
+}
+
+.protractor-title {
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+
+/* ----------------------------------------------------------------- panel */
+
+.panel {
+  width: 20rem;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 1rem 1.15rem;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+
+.panel section {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.readout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.75rem;
+  margin: 0;
+}
+
+.readout dt {
+  color: var(--ink-muted);
+}
+
+.readout dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.field label {
+  color: var(--ink-muted);
+}
+
+.field input,
+.field select {
+  width: 9rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.basis {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.family-toggles {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.family-toggles li {
+  margin-bottom: 0.35rem;
+}
+
+.family-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.swatch {
+  display: inline-block;
+  width: 18px;
+  border-radius: 1px;
+}
+
+.swatch-plain {
+  height: 2px;
+  background: var(--ink-muted);
+}
+
+.reset {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reset:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel-footer {
+  border-bottom: 0;
+}
+
+.panel-footer p {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.disclaimer {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 860px) {
+  .app-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* Stacked, the chart needs a floor or flex collapses it to nothing. */
+  .chart-pane {
+    flex: none;
+    height: 70vh;
+    min-height: 22rem;
+  }
+
+  .panel {
+    width: 100%;
+    flex: none;
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}

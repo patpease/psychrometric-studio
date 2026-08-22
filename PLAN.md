@@ -508,7 +508,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | Phase | Deliverable | Gate |
 |---|---|---|
 | 0 | Repo, project schema, CI, unit system, State engine | ✅ **Complete** — 101 tests passing; see §14 |
-| 1 | Chart engine — all line families, both unit systems, altitude, zoom/pan/hover | Visual comparison against a published ASHRAE chart |
+| 1 | Chart engine — all line families, both unit systems, altitude, zoom/pan/hover | ✅ **Complete** — matches ASHRAE Chart No. 1 at 80/67; see §15 |
 | 2 | State points and core process chain, loads, drag interaction | Energy balance closes; hand calcs match |
 | 3 | Comfort module — PMV/PPD, polygon, adaptive chart | Matches CBE tool output for identical inputs |
 | 4 | Coil detail, energy recovery, advanced processes | No-ADP and balance guards proven |
@@ -623,3 +623,80 @@ read rather than a bug to file.
 - Chart line families must respect the precision floor when tessellating.
 - The desiccant idealisation label (decision 2) needs a UI treatment designed
   alongside the process panel, not bolted on at Phase 4.
+
+
+---
+
+## 15. Phase 1 outcome
+
+*Completed 2026-08-22. 202 tests passing, type check clean, production build green.*
+
+Delivered: the chart coordinate system, all six line families with exact
+clipping to the saturation curve, the SHR protractor, an SVG renderer, and
+hover/zoom/pan interaction — in both unit systems, at any site pressure.
+
+### The gate
+
+Cursor positioned by **(Tdb, W) only** — 80 °F, 0.0112 lb/lb — with every other
+property computed independently:
+
+| Property | Computed | ASHRAE Chart No. 1 |
+|---|---|---|
+| Wet bulb | 67.0 °F | 67 °F |
+| Dew point | 60.4 °F | ~60.3 °F |
+| Relative humidity | 51.2 % | ~51 % |
+| Enthalpy | 31.48 Btu/lb | ~31.4 Btu/lb |
+| Specific volume | 13.850 ft³/lb | 13.85 ft³/lb |
+
+80 °F DB / 67 °F WB is the standard AHRI coil-rating condition; all five derived
+properties agree. The same air was then read in SI and cross-checked property by
+property.
+
+### Findings
+
+1. **The specific-volume inverse needed no new physics.** `GetMoistAirVolume` is
+   exactly linear in W about the dry-air volume, and `GetDryAirVolume` is already
+   in PsychroLib — so the inverse is `W = (v / v_dry − 1) / 1.607858`, a
+   rearrangement rather than a re-derivation. The molar-mass constant is
+   *measured back out of the library* in the test suite rather than trusted, so
+   it cannot drift from the vendored source. Round-trips to better than 1e-9
+   across both systems and three altitudes.
+
+2. **Enthalpy does not convert between unit systems, and users will report this
+   as a bug.** IP enthalpy is referenced to 0 °F, SI to 0 °C, so the scales are
+   offset as well as scaled: the same air reads 31.48 Btu/lb and 55.39 kJ/kg,
+   where a naive conversion predicts 73.2. The 17.8 kJ/kg gap is exactly the
+   datum shift. Only enthalpy *differences* are system-independent — which is
+   all any duty calculation uses, so no result is affected. Pinned in tests and
+   documented in `docs/calculation-reference.md` §5.
+
+3. **A stale hover state across a unit switch produced confidently wrong
+   readings.** Toggling IP→SI left the previously solved state in place, so IP
+   values rendered through SI formatters: "0.03 kJ/kg", "13.85 m³/kg". Fixed by
+   discarding the hover state whenever units or pressure change — the cursor has
+   not moved, so there is no correct value to show — plus a guard that refuses to
+   format a state through another system's formatters.
+
+4. **Batched wheel events collapsed the zoom.** Eight wheel events arriving in
+   one task all read the same domain from a ref, so the zoom advanced by one
+   step instead of eight. Fixed by making `onDomainChange` take an updater and
+   resolving the focus point against whichever domain is current when the update
+   runs.
+
+5. **The oblique projection is deferred, not approximated.** Printed ASHRAE
+   charts use oblique coordinates where the enthalpy axis is skewed and dry-bulb
+   lines are not quite vertical. That changes *which lines are straight*, so it
+   is a real projection rather than a shear. Rectangular Tdb–W is what
+   PsychPlotter, the CBE tool, and essentially all software use. The
+   `ChartProjection` type has one member today so the decision surfaces in review
+   rather than being quietly forgotten.
+
+### Carried into Phase 2
+
+- Label collision avoidance is currently a fixed per-family offset, tuned so
+  wet-bulb and enthalpy labels clear each other on the saturation curve. Process
+  points and their labels will need real collision handling.
+- `shrForSlope` already exists and is tested; Phase 2's room load line should use
+  it rather than re-deriving the relation.
+- The protractor is drawn at a fixed size in the upper-left. Once process lines
+  exist, it should become draggable so it can be aligned against one.

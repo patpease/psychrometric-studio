@@ -14,15 +14,15 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 0 complete** — calculation engine, project schema, and validation gate.
-There is no chart yet; that is Phase 1. See [PLAN.md](PLAN.md) for the full
-roadmap.
+**Phase 1 complete** — an interactive psychrometric chart in both unit systems,
+at any site pressure, verified against ASHRAE Chart No. 1. Process modelling is
+Phase 2. See [PLAN.md](PLAN.md) for the full roadmap.
 
 | Phase | Deliverable | Status |
 |---|---|---|
 | 0 | Repo, project schema, CI, unit system, state engine | ✅ done |
-| 1 | Chart engine — all line families, both unit systems, zoom/pan/hover | next |
-| 2 | State points and core process chain | |
+| 1 | Chart engine — all line families, both unit systems, zoom/pan/hover | ✅ done |
+| 2 | State points and core process chain | next |
 | 3 | Comfort module — PMV/PPD, comfort polygon, adaptive | |
 | 4 | Coil detail, energy recovery, advanced processes | |
 | 5 | EPW import, scatter, density bins, hours-in-zone | |
@@ -69,7 +69,7 @@ Verify the vendored calculation basis has not drifted:
 cd web && npm run verify:vendor
 ```
 
-Start the dev server (Phase 0 shows an engine self-check page, not a chart):
+Start the dev server:
 
 ```bash
 cd web && npm run dev
@@ -95,6 +95,9 @@ Three rules that the tests enforce and that are easy to break by accident:
 3. **Do not assert precision finer than `CONVERGENCE_TOLERANCE`.** Wet-bulb
    values are iterative and good to ±0.001 °C. Tighter assertions fail for
    reasons that have nothing to do with your change.
+4. **Enthalpy is not comparable across unit systems.** The IP and SI datums
+   differ (0 °F vs 0 °C). Only enthalpy *differences* convert. See
+   [calculation-reference §5](docs/calculation-reference.md).
 
 ## Licensing
 

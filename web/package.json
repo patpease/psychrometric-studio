@@ -12,13 +12,18 @@
     "verify:vendor": "../scripts/vendor-psychrolib.sh"
   },
   "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "typescript": "^5.6.0",
-    "vite": "^5.4.0",
-    "vitest": "^2.1.0"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
-    "psychrolib-vendored": "file:vendor"
+    "psychrolib-vendored": "file:vendor",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

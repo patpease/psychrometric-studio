@@ -166,3 +166,58 @@ describe('system metadata', () => {
     }
   });
 });
+
+describe('IP and SI describe the same air consistently', () => {
+  /**
+   * The same physical condition — 80 °F / 26.667 °C at W = 0.0112 — solved in
+   * both systems. Every property must agree under conversion **except
+   * enthalpy**, which does not, and whose disagreement is the point of this
+   * suite.
+   */
+  const ipState = fromTdbRh(80, 0.512, DEFAULTS.IP.standardPressure, 'IP');
+  const siState = fromTdbRh(26.6667, 0.512, DEFAULTS.SI.standardPressure, 'SI');
+
+  it('humidity ratio is dimensionless and identical', () => {
+    expect(siState.w).toBeCloseTo(ipState.w, 5);
+  });
+
+  it('temperatures convert', () => {
+    expect(fahrenheitToCelsius(ipState.twb)).toBeCloseTo(siState.twb, 1);
+    expect(fahrenheitToCelsius(ipState.tdp)).toBeCloseTo(siState.tdp, 1);
+  });
+
+  it('specific volume converts by 0.062428 m³/kg per ft³/lb', () => {
+    expect(ipState.v * 0.0624279606).toBeCloseTo(siState.v, 3);
+  });
+
+  it('density converts by 16.0185 kg/m³ per lb/ft³', () => {
+    expect(ipState.density * 16.018463).toBeCloseTo(siState.density, 2);
+  });
+
+  it('vapour pressure converts by 6894.76 Pa per psi', () => {
+    expect(ipState.vapourPressure * 6894.757).toBeCloseTo(siState.vapourPressure, 0);
+  });
+
+  /**
+   * **Enthalpy does not convert, and must not be expected to.**
+   *
+   * IP moist-air enthalpy is referenced to 0 °F; SI to 0 °C. The datums differ
+   * by 32 °F, so the two scales are offset as well as scaled. Switching unit
+   * systems in the application therefore changes the enthalpy reading by more
+   * than a unit conversion — which looks like a bug and is not.
+   *
+   * @see docs/calculation-reference.md §5
+   */
+  it('enthalpy differs from a pure conversion by exactly the datum shift', () => {
+    const BTU_PER_LB_TO_KJ_PER_KG = 2.326;
+    const naive = ipState.h * BTU_PER_LB_TO_KJ_PER_KG;
+    const actual = enthalpyToDisplay(siState.h, 'SI');
+
+    // A naive conversion overstates SI enthalpy...
+    expect(naive).toBeGreaterThan(actual);
+
+    // ...by the dry-air enthalpy of the 32 °F datum offset: cp × (32 °F in K).
+    const datumShift = 1.006 * deltaFahrenheitToCelsius(32);
+    expect(naive - actual).toBeCloseTo(datumShift, 0);
+  });
+});

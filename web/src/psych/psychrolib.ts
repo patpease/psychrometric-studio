@@ -94,6 +94,17 @@ export function lib(units: UnitSystem): PsychroLib {
 }
 
 /**
+ * PsychroLib's internal floor on humidity ratio.
+ *
+ * Every function that accepts a humidity ratio clamps it to at least this value
+ * — so `GetMoistAirVolume(t, 0, p)` actually returns the volume at 1e-7, and any
+ * inverse correctly recovers 1e-7 rather than 0. In display terms this is
+ * 0.0007 gr/lb or 0.0001 g/kg: far below measurable, but it means round trips
+ * through bone-dry air are not bit-exact, and tests must sweep above it.
+ */
+export const MIN_HUM_RATIO = 1e-7;
+
+/**
  * PsychroLib's own iterative convergence tolerance, in temperature units.
  *
  * `GetTWetBulbFromHumRatio` and `GetTDewPointFromVapPres` are iterative and

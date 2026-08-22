@@ -1,0 +1,331 @@
+/**
+ * The chart renderer.
+ *
+ * Hand-authored SVG rather than a plotting library. A psychrometric chart is a
+ * coordinate system, not a plot of data: curved gridlines, a domain clipped by
+ * the saturation curve, labels that follow their curves, and overlays yet to
+ * come. Plotting libraries fight all four. D3-style scales are enough, and
+ * emitting SVG directly means vector export in Phase 7 is a DOM serialisation
+ * rather than a second rendering path.
+ */
+import { useMemo } from 'react';
+import type { ChartDomain, ChartScales, DataPoint } from './scales.js';
+import { createScales, niceTicks } from './scales.js';
+import {
+  saturationCurve,
+  relativeHumidityLine,
+  wetBulbLine,
+  enthalpyLine,
+  specificVolumeLine,
+  dewPointLine,
+  defaultTicks,
+  type ChartLine,
+  type FamilyKey,
+} from './families.js';
+import { FAMILY_STYLES, DRAW_ORDER } from './theme.js';
+import { protractorRays } from './protractor.js';
+import { humidityRatioToDisplay, LABELS, type UnitSystem } from '../psych/units.js';
+import { formatTemperature, lineLabel } from '../ui/format.js';
+import type { MoistAirState } from '../psych/state.js';
+
+export interface ChartProps {
+  domain: ChartDomain;
+  pressure: number;
+  units: UnitSystem;
+  width: number;
+  height: number;
+  visibility: Record<FamilyKey, boolean>;
+  showProtractor: boolean;
+  /** State under the cursor, or null when the pointer is off-chart. */
+  hover: MoistAirState | null;
+}
+
+/** Build an SVG path from points in psychrometric space. */
+function pathFrom(points: readonly DataPoint[], scales: ChartScales): string {
+  if (points.length === 0) return '';
+  return points
+    .map((p, i) => {
+      const { x, y } = scales.project(p.tdb, p.w);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+/** Angle in degrees of the line's tangent at the labelled end. */
+function labelAngle(points: readonly DataPoint[], scales: ChartScales, atStart: boolean): number {
+  if (points.length < 2) return 0;
+  const [a, b] = atStart
+    ? [points[0]!, points[1]!]
+    : [points[points.length - 2]!, points[points.length - 1]!];
+  const pa = scales.project(a.tdb, a.w);
+  const pb = scales.project(b.tdb, b.w);
+  return (Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180) / Math.PI;
+}
+
+function LineFamily({
+  lines,
+  family,
+  scales,
+}: {
+  lines: ChartLine[];
+  family: FamilyKey;
+  scales: ChartScales;
+}): React.JSX.Element {
+  const style = FAMILY_STYLES[family];
+
+  return (
+    <g className={`family family-${family}`}>
+      {lines.map((line, index) => {
+        const atStart = style.labelAt === 'start';
+        const anchorPoint = atStart ? line.points[0] : line.points[line.points.length - 1];
+        if (!anchorPoint) return null;
+
+        const anchor = scales.project(anchorPoint.tdb, anchorPoint.w);
+        const angle = labelAngle(line.points, scales, atStart);
+        // Keep text upright: flip any label that would read upside-down.
+        const upright = angle > 90 || angle < -90 ? angle + 180 : angle;
+
+        return (
+          <g key={`${line.value}-${index}`}>
+            <path
+              d={pathFrom(line.points, scales)}
+              fill="none"
+              stroke={style.colour}
+              strokeWidth={style.width}
+              strokeDasharray={style.dash}
+              strokeLinecap="round"
+            />
+            {line.label && (
+              <text
+                className="line-label"
+                x={anchor.x}
+                y={anchor.y}
+                dx={atStart ? -style.labelOffset : style.labelOffset}
+                dy={-3}
+                textAnchor={atStart ? 'end' : 'start'}
+                transform={`rotate(${upright.toFixed(1)} ${anchor.x.toFixed(2)} ${anchor.y.toFixed(2)})`}
+                fill={style.colour}
+              >
+                {line.label}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function Protractor({
+  units,
+  scales,
+}: {
+  units: UnitSystem;
+  scales: ChartScales;
+}): React.JSX.Element {
+  const radius = 54;
+  // Upper-left of the plot area, where the chart is empty because that region
+  // is above the saturation curve.
+  const cx = scales.margin.left + radius + 28;
+  const cy = scales.margin.top + radius + 12;
+
+  const pixelsPerDegree = scales.plotWidth / (scales.domain.tdbMax - scales.domain.tdbMin);
+  const pixelsPerW = scales.plotHeight / (scales.domain.wMax - scales.domain.wMin);
+  const rays = protractorRays(units, pixelsPerDegree, pixelsPerW);
+
+  return (
+    <g className="protractor">
+      <circle cx={cx} cy={cy} r={radius} className="protractor-face" />
+      <circle cx={cx} cy={cy} r={2.5} className="protractor-hub" />
+      {rays.map((ray) => {
+        const x2 = cx + ray.direction.dx * radius;
+        const y2 = cy + ray.direction.dy * radius;
+        const lx = cx + ray.direction.dx * (radius + 12);
+        const ly = cy + ray.direction.dy * (radius + 12);
+        return (
+          <g key={ray.shr}>
+            <line x1={cx} y1={cy} x2={x2} y2={y2} className="protractor-ray" />
+            <text x={lx} y={ly} className="protractor-label" textAnchor="middle" dy="0.32em">
+              {ray.label}
+            </text>
+          </g>
+        );
+      })}
+      <text x={cx} y={cy + radius + 28} className="protractor-title" textAnchor="middle">
+        SHR
+      </text>
+    </g>
+  );
+}
+
+export function Chart({
+  domain,
+  pressure,
+  units,
+  width,
+  height,
+  visibility,
+  showProtractor,
+  hover,
+}: ChartProps): React.JSX.Element {
+  const scales = useMemo(() => createScales(domain, width, height), [domain, width, height]);
+
+  /**
+   * Line families are recomputed whenever the domain, pressure, or unit system
+   * changes — which is also exactly when they must be re-tessellated, so tying
+   * the memo to those three keeps resolution correct as the user zooms.
+   */
+  const families = useMemo(() => {
+    const ticks = defaultTicks(units);
+    const result: Record<FamilyKey, ChartLine[]> = {
+      saturation: [saturationCurve(domain, pressure, units)],
+      relativeHumidity: ticks.relativeHumidity.flatMap((v) =>
+        relativeHumidityLine(v, domain, pressure, units),
+      ),
+      wetBulb: ticks.wetBulb.flatMap((v) =>
+        wetBulbLine(v, domain, pressure, units, (x) => lineLabel.wetBulb(x, units)),
+      ),
+      enthalpy: ticks.enthalpy.flatMap((v) =>
+        enthalpyLine(v, domain, pressure, units, (x) => lineLabel.enthalpy(x, units)),
+      ),
+      specificVolume: ticks.specificVolume.flatMap((v) =>
+        specificVolumeLine(v, domain, pressure, units, (x) => lineLabel.specificVolume(x, units)),
+      ),
+      dewPoint: ticks.dewPoint.flatMap((v) =>
+        dewPointLine(v, domain, pressure, units, (x) => lineLabel.dewPoint(x, units)),
+      ),
+    };
+    return result;
+  }, [domain, pressure, units]);
+
+  const xTicks = useMemo(() => niceTicks(domain.tdbMin, domain.tdbMax, 12), [domain]);
+  const yTicks = useMemo(() => {
+    // Ticks are chosen in display units so the labels are round numbers, then
+    // converted back — picking them in lb/lb would give values like 0.0071.
+    const displayMax = humidityRatioToDisplay(domain.wMax, units);
+    const displayMin = humidityRatioToDisplay(domain.wMin, units);
+    return niceTicks(displayMin, displayMax, 10).map((display) => ({
+      display,
+      w: units === 'IP' ? display / 7000 : display / 1000,
+    }));
+  }, [domain, units]);
+
+  const plotLeft = scales.margin.left;
+  const plotTop = scales.margin.top;
+  const plotRight = plotLeft + scales.plotWidth;
+  const plotBottom = plotTop + scales.plotHeight;
+
+  const hoverPoint = hover ? scales.project(hover.tdb, hover.w) : null;
+
+  return (
+    <svg
+      className="psych-chart"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label="Psychrometric chart"
+    >
+      <defs>
+        {/* Everything inside the plot is clipped, so a family that runs past the
+            frame is cut at the frame rather than drawn over the axes. */}
+        <clipPath id="plot-clip">
+          <rect x={plotLeft} y={plotTop} width={scales.plotWidth} height={scales.plotHeight} />
+        </clipPath>
+      </defs>
+
+      <rect
+        x={plotLeft}
+        y={plotTop}
+        width={scales.plotWidth}
+        height={scales.plotHeight}
+        className="plot-background"
+      />
+
+      <g clipPath="url(#plot-clip)">
+        {/* Axis gridlines sit behind every family. */}
+        <g className="gridlines">
+          {xTicks.map((t) => {
+            const { x } = scales.project(t, domain.wMin);
+            return <line key={`gx-${t}`} x1={x} y1={plotTop} x2={x} y2={plotBottom} />;
+          })}
+          {yTicks.map((t) => {
+            const { y } = scales.project(domain.tdbMin, t.w);
+            return <line key={`gy-${t.display}`} x1={plotLeft} y1={y} x2={plotRight} y2={y} />;
+          })}
+        </g>
+
+        {DRAW_ORDER.filter((family) => visibility[family]).map((family) => (
+          <LineFamily key={family} family={family} lines={families[family]} scales={scales} />
+        ))}
+
+        {hoverPoint && (
+          <g className="hover-marker">
+            <line x1={plotLeft} y1={hoverPoint.y} x2={hoverPoint.x} y2={hoverPoint.y} />
+            <line x1={hoverPoint.x} y1={hoverPoint.y} x2={hoverPoint.x} y2={plotBottom} />
+            <circle cx={hoverPoint.x} cy={hoverPoint.y} r={4} />
+          </g>
+        )}
+      </g>
+
+      {showProtractor && <Protractor units={units} scales={scales} />}
+
+      {/* Frame */}
+      <rect
+        x={plotLeft}
+        y={plotTop}
+        width={scales.plotWidth}
+        height={scales.plotHeight}
+        className="plot-frame"
+      />
+
+      {/* Dry-bulb axis, along the bottom */}
+      <g className="axis axis-x">
+        {xTicks.map((t) => {
+          const { x } = scales.project(t, domain.wMin);
+          return (
+            <g key={`x-${t}`}>
+              <line x1={x} y1={plotBottom} x2={x} y2={plotBottom + 5} />
+              <text x={x} y={plotBottom + 18} textAnchor="middle">
+                {formatTemperature(t, units)}
+              </text>
+            </g>
+          );
+        })}
+        <text
+          className="axis-title"
+          x={(plotLeft + plotRight) / 2}
+          y={plotBottom + 40}
+          textAnchor="middle"
+        >
+          Dry-bulb temperature ({LABELS[units].temperature})
+        </text>
+      </g>
+
+      {/* Humidity ratio axis, on the right — the conventional side */}
+      <g className="axis axis-y">
+        {yTicks.map((t) => {
+          const { y } = scales.project(domain.tdbMin, t.w);
+          if (y < plotTop - 0.5 || y > plotBottom + 0.5) return null;
+          return (
+            <g key={`y-${t.display}`}>
+              <line x1={plotRight} y1={y} x2={plotRight + 5} y2={y} />
+              <text x={plotRight + 9} y={y} dy="0.32em" textAnchor="start">
+                {t.display.toFixed(units === 'IP' ? 0 : 1)}
+              </text>
+            </g>
+          );
+        })}
+        <text
+          className="axis-title"
+          transform={`rotate(90 ${plotRight + 62} ${(plotTop + plotBottom) / 2})`}
+          x={plotRight + 62}
+          y={(plotTop + plotBottom) / 2}
+          textAnchor="middle"
+        >
+          Humidity ratio ({LABELS[units].humidityRatio})
+        </text>
+      </g>
+    </svg>
+  );
+}
