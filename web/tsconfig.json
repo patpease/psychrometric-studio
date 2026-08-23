@@ -19,7 +19,13 @@
     "types": [
       "vitest/globals"
     ],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "jsthermalcomfort": [
+        "./src/types/jsthermalcomfort.d.ts"
+      ]
+    }
   },
   "include": [
     "src",

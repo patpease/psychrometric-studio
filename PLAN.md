@@ -33,17 +33,21 @@ ASHRAE Standard 55-2023 (via jsthermalcomfort / pythermalcomfort).
 | Weather data | EPW import with 8,760-hour scatter; bin density heatmap + hours-in-zone stats |
 | Output | JSON project file, branded PDF report, PNG + vector SVG/PDF, shareable URL, CSV |
 
-**Explicitly out of scope for v1** (deferred, not rejected): SET and the
-elevated-air-speed cooling effect; local discomfort indices (ankle draft,
-vertical gradient, floor temperature, radiant asymmetry); EN 16798 / ISO 7730
-comfort criteria; standard envelope library (datacenter TC9.9, cleanroom,
-archive); user-drawn custom envelopes.
+**Explicitly out of scope for v1** (deferred, not rejected): local discomfort
+indices (ankle draft, vertical gradient, floor temperature, radiant asymmetry);
+EN 16798 / ISO 7730 comfort criteria; SET as a *reported index*; standard
+envelope library (datacenter TC9.9, cleanroom, archive); user-drawn custom
+envelopes.
 
-> Deferring SET has a consequence worth knowing: without the cooling-effect
-> calculation, the tool cannot assess any design relying on air movement above
-> 0.2 m/s (ceiling fans, natural ventilation, personal comfort systems). The
-> comfort zone will be the still-air zone only. Design the comfort module so SET
-> slots in later without restructuring — see §6.4.
+> **Correction, Phase 3.** This section previously listed "SET and the
+> elevated-air-speed cooling effect" as out of scope, and warned that the tool
+> could not assess designs relying on air movement above 0.2 m/s. **That is not
+> the case.** `jsthermalcomfort`'s ASHRAE variant of PMV applies the SET-based
+> cooling effect of ASHRAE 55 Appendix H internally, so raising air speed widens
+> the comfort zone toward warmer temperatures exactly as the standard intends.
+> Ceiling fans, natural ventilation, and personal comfort systems are all
+> assessable. What remains out of scope is *reporting SET itself* as a separate
+> index — the underlying model is present either way.
 
 ### 2.1 What ports from bh-psych
 
@@ -510,7 +514,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | 0 | Repo, project schema, CI, unit system, State engine | ✅ **Complete** — 101 tests passing; see §14 |
 | 1 | Chart engine — all line families, both unit systems, altitude, zoom/pan/hover | ✅ **Complete** — matches ASHRAE Chart No. 1 at 80/67; see §15 |
 | 2 | State points and core process chain, loads, drag interaction | ✅ **Complete** — balance closes on four chains; see §16 |
-| 3 | Comfort module — PMV/PPD, polygon, adaptive chart | Matches CBE tool output for identical inputs |
+| 3 | Comfort module — PMV/PPD, polygon, adaptive chart | ✅ **Complete** — zone boundaries match published ASHRAE 55; see §17 |
 | 4 | Coil detail, energy recovery, advanced processes | No-ADP and balance guards proven |
 | 5 | EPW import, scatter, density bins, hours-in-zone | 8,760 points pan at 60 fps |
 | 6 | Education — walkthrough engine + first two walkthroughs | A new engineer completes one unaided |
@@ -779,3 +783,75 @@ worked in the test comments.
 - The comfort polygon needs the same "recompute everything on every edit"
   treatment the chain got: it is cheap enough, and it removes a whole class of
   stale-state bug.
+
+
+---
+
+## 17. Phase 3 outcome
+
+*Completed 2026-08-22. 283 tests passing, type check clean, verified in browser.*
+
+Delivered: PMV/PPD per ASHRAE 55, the comfort-zone polygon on the psychrometric
+chart, the adaptive model with its own chart, applicability limits surfaced
+throughout, and comfort controls in the panel.
+
+### The gate
+
+Zone boundaries at 50% RH, 1.1 met, still air, MRT = air temperature:
+
+| Zone | Computed | Published ASHRAE 55 |
+|---|---|---|
+| Winter, 1.0 clo | 20.3–24.5 °C (68.6–76.0 °F) | ≈ 20–24 °C (68–75 °F) |
+| Summer, 0.5 clo | 23.9–26.9 °C (75.0–80.4 °F) | ≈ 23–26 °C (74–79 °F) |
+
+The library's own documented reference case reproduces exactly (PMV 0.08,
+PPD 5.1 at 25 °C / 50% / 1.2 met / 0.5 clo), and the drawn polygon is separately
+checked against the raw boundary solver so the two cannot drift apart.
+
+### Findings
+
+1. **The elevated-air-speed cooling effect was already available, and Phase 1's
+   note about it was wrong.** The ASHRAE variant of PMV applies Appendix H's
+   SET-based cooling effect internally: at 27 °C, raising air speed from 0.1 to
+   0.8 m/s moves PMV from +0.53 to −0.53, and the drawn zone widens toward
+   warmer temperatures. §2 has been corrected rather than left standing.
+
+2. **`round_output` defaults to true and would have broken the polygon
+   silently.** It quantises PMV to two decimal places, which turns the boundary
+   bisection into a staircase that cannot converge on ±0.5. The zone would have
+   come out lumpy rather than absent — a failure that looks like a rendering
+   artefact rather than a numerical one.
+
+3. **`JSON.stringify(NaN)` prints `null`, and that nearly shipped a bug.** The
+   adaptive model signals an out-of-range outdoor temperature with **NaN**, but
+   inspecting its output as JSON shows `null`. A `value === null` guard —
+   which is what that observation invites — never fires, and "NaN °F" reaches
+   the interface. Only a finiteness check holds. Caught by a test that asserted
+   `toBeNull()`.
+
+4. **jsthermalcomfort 1.4.0 ships a declaration file that does not parse.**
+   `pet_steady.d.ts` contains `(: [number, number, number]) => …`, a parameter
+   with no name. `skipLibCheck` suppresses semantic errors in declaration files
+   but not syntax errors, so the build failed on a function this application
+   never calls. Resolved with local typings mapped through `paths`, which also
+   replaces the package's `any`-typed signatures with real ones — worth having,
+   since `pmv_ppd_ashrae(tdb: any, …)` offers no protection against passing
+   relative humidity as a fraction where a percentage is required.
+
+5. **The comfort zone is drawn against dry bulb, not operative temperature.**
+   The CBE tool switches its x-axis to operative temperature when the radiant
+   temperature differs from the air temperature. This chart cannot: relative
+   humidity, wet bulb, enthalpy, and specific volume are all defined against
+   dry bulb, and re-labelling the axis would silently invalidate every one of
+   them. The radiant offset is carried as a parameter instead.
+
+### Carried into Phase 4
+
+- `comfortZone` returns an empty polygon with a stated reason rather than
+  throwing. The coil ADP construction should do the same for the no-intersection
+  case, which is the equivalent degenerate condition.
+- The adaptive chart needs real weather to be useful. Phase 5's EPW import
+  should feed `runningMeanOutdoor`, which is written and tested but currently
+  has no data source.
+- Comfort inputs are not yet in the project schema's `comfort` block, so they do
+  not survive save/load. Wire that up in Phase 7.

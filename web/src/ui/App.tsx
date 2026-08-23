@@ -27,6 +27,12 @@ import { fromTdbW, saturationHumidityRatio } from '../psych/state.js';
 import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
 import { ChainEditor } from './ChainEditor.js';
+import {
+  ComfortPanel,
+  buildZones,
+  defaultComfortSettings,
+  type ComfortSettingsState,
+} from './ComfortPanel.js';
 import { ResultsPanel } from './ResultsPanel.js';
 import { solveProject } from '../processes/chain.js';
 import type { Stage } from '../types/project.js';
@@ -92,6 +98,7 @@ export function App(): React.JSX.Element {
   const [showProtractor, setShowProtractor] = useState(false);
   const [stages, setStages] = useState<Stage[]>(() => STARTER_SYSTEM);
   const [selectedStage, setSelectedStage] = useState<number | null>(null);
+  const [comfort, setComfort] = useState<ComfortSettingsState>(() => defaultComfortSettings('IP'));
 
   const [sizeRef, size] = useElementSize();
   const limits = useMemo(() => domainLimits(units), [units]);
@@ -116,6 +123,9 @@ export function App(): React.JSX.Element {
   const switchUnits = (next: UnitSystem): void => {
     setUnits(next);
     setDomain(defaultDomain(next));
+    // The adaptive model's temperatures are absolute, so its defaults have to
+    // be re-expressed rather than carried across unchanged.
+    setComfort((current) => ({ ...current, ...defaultComfortSettings(next), model: current.model }));
   };
 
   /**
@@ -140,6 +150,17 @@ export function App(): React.JSX.Element {
   );
 
   const supply = solved.airstreams[0]!;
+
+  /**
+   * Comfort zones rebuild whenever any input changes. Each zone is about a
+   * hundred bisections of a closed-form model, which is comfortably inside a
+   * frame — and recomputing wholesale removes any possibility of a zone drawn
+   * for last frame's clothing level.
+   */
+  const zones = useMemo(
+    () => buildZones(comfort, atmosphere.pressure, units),
+    [comfort, atmosphere.pressure, units],
+  );
 
   /**
    * Drag an entering-air point to a new condition.
@@ -251,11 +272,21 @@ export function App(): React.JSX.Element {
             selectedStage={selectedStage}
             onSelectStage={setSelectedStage}
             onDragState={dragSource}
+            comfortZones={zones}
           />
           <p className="chart-hint">Scroll to zoom · drag to pan</p>
         </div>
 
         <aside className="panel panel-right">
+          <ComfortPanel
+            settings={comfort}
+            onChange={setComfort}
+            units={units}
+            pressure={atmosphere.pressure}
+            zones={zones}
+            sample={hover ? { tdb: hover.tdb, rh: hover.rh } : null}
+          />
+
           <ResultsPanel
             solved={supply}
             units={units}

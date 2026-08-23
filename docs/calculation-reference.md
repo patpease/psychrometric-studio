@@ -147,6 +147,55 @@ enthalpy *differences* — which is what every duty and load calculation actuall
 uses — are system-independent once converted, which is why this never affects a
 result. The relationship is pinned in `tests/units.test.ts`.
 
+## 5b. Thermal comfort
+
+| | |
+|---|---|
+| Standard | ASHRAE 55-2023 |
+| Library | `jsthermalcomfort` 1.4.0 (MIT), the JavaScript port of `pythermalcomfort` |
+| Evaluation | **Always in SI**, whatever the application's unit system |
+
+PsychroLib does not do comfort, so this is the one place a second library is
+used. Three things about it are worth knowing.
+
+**Everything is evaluated in SI.** The library offers an IP path, but it
+converts air speed via feet per second, so 20 fpm arrives as 0.10058 m/s — just
+above the 0.1 m/s threshold at which ASHRAE Appendix H begins computing a
+cooling effect. The solver then cannot converge on an effect that is essentially
+zero, warns, and falls back to zero. Converting at our own boundary avoids that,
+and PMV is defined in SI regardless.
+
+**Elevated air speed is credited.** The ASHRAE variant applies the SET-based
+cooling effect of Appendix H before evaluating PMV, so raising air speed widens
+the comfort zone toward warmer temperatures. At 27 °C, 0.5 clo, 1.1 met, PMV
+falls from +0.53 at 0.1 m/s to −0.53 at 0.8 m/s. ASHRAE 55 requires occupants to
+have control of that air movement, which the interface states.
+
+**The adaptive model returns NaN, not null, outside its range.**
+`JSON.stringify(NaN)` prints `null`, which makes the opposite appear true; a
+`=== null` guard never fires and "NaN °F" reaches the interface. Only a
+finiteness check is correct.
+
+### The comfort zone
+
+Built by sweeping relative humidity from 0 to 100% and, at each step, solving
+for the dry-bulb temperature where PMV equals −0.5 and +0.5. PMV rises
+monotonically with dry bulb — asserted in the tests — which makes bisection
+safe. The top is clipped at **W = 0.012 kg/kg**, the 55-2023 upper humidity
+limit; **55-2023 sets no lower limit**, and drawing one would be wrong.
+
+The zone is plotted against **dry-bulb temperature**, not operative temperature.
+The CBE tool switches its axis when radiant and air temperatures differ; this
+chart cannot, because every other family on it is defined against dry bulb. The
+radiant offset is carried as a parameter of the comfort calculation instead.
+
+Boundary check at 50% RH, 1.1 met, still air:
+
+| Zone | This tool | Published ASHRAE 55 |
+|---|---|---|
+| Winter, 1.0 clo | 20.3–24.5 °C | ≈ 20–24 °C |
+| Summer, 0.5 clo | 23.9–26.9 °C | ≈ 23–26 °C |
+
 ## 6. Sign conventions
 
 - **Duty is positive into the airstream.** Cooling therefore reads negative.

@@ -26,6 +26,8 @@ import { FAMILY_STYLES, DRAW_ORDER } from './theme.js';
 import { protractorRays } from './protractor.js';
 import { humidityRatioToDisplay, LABELS, type UnitSystem } from '../psych/units.js';
 import { ProcessOverlay, ProcessArrowMarker } from './ProcessOverlay.js';
+import { ComfortOverlay } from './ComfortOverlay.js';
+import type { ComfortZone } from '../comfort/polygon.js';
 import type { SolvedAirstream } from '../processes/chain.js';
 import { formatTemperature, lineLabel } from '../ui/format.js';
 import type { MoistAirState } from '../psych/state.js';
@@ -45,6 +47,8 @@ export interface ChartProps {
   selectedStage?: number | null;
   onSelectStage?: (index: number | null) => void;
   onDragState?: ((stageIndex: number, tdb: number, w: number) => void) | undefined;
+  /** ASHRAE 55 comfort zones to fill beneath the process chain. */
+  comfortZones?: readonly ComfortZone[] | undefined;
 }
 
 /** Build an SVG path from points in psychrometric space. */
@@ -178,6 +182,7 @@ export function Chart({
   selectedStage = null,
   onSelectStage,
   onDragState,
+  comfortZones,
 }: ChartProps): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scales = useMemo(() => createScales(domain, width, height), [domain, width, height]);
@@ -268,6 +273,12 @@ export function Chart({
       />
 
       <g clipPath="url(#plot-clip)">
+        {/* Comfort zones sit behind everything: they are context for the
+            chart, not a layer over it. */}
+        {comfortZones && comfortZones.length > 0 && (
+          <ComfortOverlay zones={comfortZones} scales={scales} />
+        )}
+
         {/* Axis gridlines sit behind every family. */}
         <g className="gridlines">
           {xTicks.map((t) => {

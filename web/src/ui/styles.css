@@ -42,6 +42,13 @@
   --ok-ink: #1F6E4E;
   --ok-bg: #E8F6EE;
   --selected-bg: #E9F2EF;
+
+  /* Comfort zones are translucent so the chart's gridlines read through them —
+     the zone is a region of the chart, not a sticker on top of it. */
+  --comfort-winter: rgba(47, 127, 209, 0.13);
+  --comfort-winter-line: rgba(47, 127, 209, 0.55);
+  --comfort-summer: rgba(194, 97, 10, 0.13);
+  --comfort-summer-line: rgba(194, 97, 10, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -80,6 +87,11 @@
     --ok-ink: #7EDCAB;
     --ok-bg: #12291F;
     --selected-bg: #1D2A31;
+
+    --comfort-winter: rgba(108, 176, 238, 0.16);
+    --comfort-winter-line: rgba(108, 176, 238, 0.6);
+    --comfort-summer: rgba(240, 163, 85, 0.16);
+    --comfort-summer-line: rgba(240, 163, 85, 0.6);
   }
 }
 
@@ -812,4 +824,149 @@ body {
 
 .process-point.draggable:active {
   cursor: grabbing;
+}
+
+/* ------------------------------------------------------------ comfort zone */
+
+.comfort-zone path {
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+}
+
+.comfort-zone-0 path {
+  fill: var(--comfort-winter);
+  stroke: var(--comfort-winter-line);
+}
+
+.comfort-zone-1 path {
+  fill: var(--comfort-summer);
+  stroke: var(--comfort-summer-line);
+}
+
+.comfort-legend {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  font-size: 0.75rem;
+}
+
+.comfort-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
+}
+
+.comfort-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.comfort-swatch.comfort-zone-0 {
+  background: var(--comfort-winter);
+  border: 1px solid var(--comfort-winter-line);
+}
+
+.comfort-swatch.comfort-zone-1 {
+  background: var(--comfort-summer);
+  border: 1px solid var(--comfort-summer-line);
+}
+
+.comfort-empty {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.comfort-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.comfort-limit {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.comfort-panel h3 {
+  margin: 0.85rem 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.verdict-ok {
+  color: var(--ok-ink);
+  font-weight: 600;
+}
+
+.verdict-no {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------- adaptive chart */
+
+.adaptive-chart {
+  display: block;
+  margin: 0.6rem 0;
+}
+
+.adaptive-bg {
+  fill: var(--plot-bg);
+}
+
+.adaptive-frame {
+  fill: none;
+  stroke: var(--frame);
+  stroke-width: 1;
+}
+
+.adaptive-band-80 {
+  fill: var(--comfort-summer);
+  stroke: var(--comfort-summer-line);
+  stroke-width: 1;
+}
+
+.adaptive-band-90 {
+  fill: var(--comfort-winter);
+  stroke: var(--comfort-winter-line);
+  stroke-width: 1;
+}
+
+.adaptive-neutral {
+  stroke: var(--process);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.adaptive-point {
+  fill: var(--hover);
+  stroke: var(--plot-bg);
+  stroke-width: 1.5;
+}
+
+.adaptive-axis text {
+  font-size: 9px;
+  fill: var(--ink-muted);
+}
+
+.adaptive-axis-title {
+  font-size: 9px;
+  fill: var(--ink-muted);
+}
+
+.adaptive-outside {
+  font-size: 10px;
+  fill: var(--ink-muted);
 }
