@@ -27,6 +27,8 @@ import { fromTdbW, saturationHumidityRatio } from '../psych/state.js';
 import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
 import { ChainEditor } from './ChainEditor.js';
+import { Collapsible } from './Collapsible.js';
+import { convertAltitude, convertComfort, convertStages } from './convertProject.js';
 import {
   ComfortPanel,
   buildZones,
@@ -63,7 +65,7 @@ const STARTER_SYSTEM: Stage[] = [
     params: { airflow2: 1600, tdb2: 75, rh2: 0.5 },
   },
   { id: 'cc', type: 'cooling', name: 'Cooling coil', params: { tdbOut: 54, rhOut: 0.93 } },
-  { id: 'sf', type: 'fan', name: 'Supply fan', params: { power: 2, motorInAirstream: true } },
+  { id: 'sf', type: 'fan', name: 'Supply fan', params: { power: 1.5, motorInAirstream: true } },
   { id: 'rm', type: 'room', name: 'Zone', params: { sensible: 42, latent: 11 } },
 ];
 
@@ -120,12 +122,30 @@ export function App(): React.JSX.Element {
   }, [pressureMode, altitude, explicitPressure, units]);
 
   /** Switching units re-frames the chart; the two domains are not comparable. */
+  /**
+   * Switch unit systems, converting the project rather than only its labels.
+   *
+   * Every stored number is in one system's units. Changing the labels without
+   * changing the values reads 95 °F as 95 °C — off the chart entirely, and
+   * solving to nonsense. Everything the project holds converts together: stage
+   * parameters, airflows, site altitude, and the comfort inputs.
+   */
   const switchUnits = (next: UnitSystem): void => {
+    const from = units;
+    if (from === next) return;
+
+    setStages((current) => convertStages(current, from, next));
+    setComfort((current) => convertComfort(current, from, next));
+    setAltitude((current) => convertAltitude(current, from, next));
+    setExplicitPressure((current) => {
+      const parsed = Number.parseFloat(current);
+      if (!Number.isFinite(parsed)) return current;
+      // psia ↔ kPa. The field is in display units, not canonical.
+      return String(Number((next === 'SI' ? parsed * 6.89476 : parsed / 6.89476).toFixed(3)));
+    });
+
     setUnits(next);
     setDomain(defaultDomain(next));
-    // The adaptive model's temperatures are absolute, so its defaults have to
-    // be re-expressed rather than carried across unchanged.
-    setComfort((current) => ({ ...current, ...defaultComfortSettings(next), model: current.model }));
   };
 
   /**
@@ -278,24 +298,28 @@ export function App(): React.JSX.Element {
         </div>
 
         <aside className="panel panel-right">
-          <ComfortPanel
+          <Collapsible title="Thermal comfort" defaultOpen>
+            <ComfortPanel
             settings={comfort}
             onChange={setComfort}
             units={units}
             pressure={atmosphere.pressure}
-            zones={zones}
-            sample={hover ? { tdb: hover.tdb, rh: hover.rh } : null}
-          />
+              zones={zones}
+              sample={hover ? { tdb: hover.tdb, rh: hover.rh } : null}
+            />
+          </Collapsible>
 
-          <ResultsPanel
-            solved={supply}
-            units={units}
-            selected={selectedStage}
-            onSelect={setSelectedStage}
-          />
+          <Collapsible title="Results" defaultOpen>
+            <ResultsPanel
+              solved={supply}
+              units={units}
+              selected={selectedStage}
+              onSelect={setSelectedStage}
+            />
+          </Collapsible>
 
-          <section>
-            <h2>Condition at cursor</h2>
+          <Collapsible title="Condition at cursor" defaultOpen>
+            <section>
             {hover ? (
               <dl className="readout">
                 <dt>Dry bulb</dt>
@@ -323,10 +347,11 @@ export function App(): React.JSX.Element {
                 no air above it to describe.
               </p>
             )}
-          </section>
+            </section>
+          </Collapsible>
 
-          <section>
-            <h2>Site pressure</h2>
+          <Collapsible title="Site pressure" defaultOpen={false}>
+            <section>
             <div className="field">
               <label htmlFor="pressure-mode">Basis</label>
               <select
@@ -372,10 +397,11 @@ export function App(): React.JSX.Element {
             <p className="basis">
               {describeBasis(atmosphere, (p) => formatPressure(p, units, true))}
             </p>
-          </section>
+            </section>
+          </Collapsible>
 
-          <section>
-            <h2>Chart lines</h2>
+          <Collapsible title="Chart lines" defaultOpen={false}>
+            <section>
             <ul className="family-toggles">
               {DRAW_ORDER.slice()
                 .reverse()
@@ -415,7 +441,8 @@ export function App(): React.JSX.Element {
             <button type="button" className="reset" onClick={() => setDomain(defaultDomain(units))}>
               Reset view
             </button>
-          </section>
+            </section>
+          </Collapsible>
 
           <footer className="panel-footer">
             <p>

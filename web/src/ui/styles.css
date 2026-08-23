@@ -970,3 +970,85 @@ body {
   font-size: 10px;
   fill: var(--ink-muted);
 }
+
+/* ------------------------------------------------------ collapsible panels */
+
+.collapsible {
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.collapsible > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A caret drawn in CSS so it rotates with the open state without any script. */
+.collapsible > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.12s ease;
+}
+
+.collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible > summary:hover {
+  color: var(--accent);
+}
+
+.collapsible-title {
+  flex: 1;
+}
+
+.collapsible-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-muted);
+}
+
+.collapsible-body {
+  padding-top: 0.6rem;
+}
+
+/* Sections inside a collapsible supply their own rhythm. */
+.collapsible-body > section {
+  padding-bottom: 0;
+  margin-bottom: 0.85rem;
+  border-bottom: 0;
+}
+
+.collapsible-body > section:last-child {
+  margin-bottom: 0;
+}
+
+.param-derived input {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.param-derived-note {
+  margin: 0.1rem 0 0;
+  font-size: 0.66rem;
+  color: var(--process);
+}

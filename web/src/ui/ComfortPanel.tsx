@@ -111,7 +111,7 @@ export function ComfortPanel({
 
   return (
     <section className="comfort-panel">
-      <h2>Thermal comfort</h2>
+
 
       <div className="field">
         <label htmlFor="comfort-model">Model</label>

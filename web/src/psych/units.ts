@@ -33,7 +33,22 @@ export interface UnitLabels {
   vapourPressure: string;
   airflow: string;
   massFlow: string;
+  /**
+   * Rate of moisture added to or removed from the air.
+   *
+   * **Per hour in both systems**, unlike `massFlow` which is per second in SI.
+   * A humidifier or condensate rate quoted per second is useless to a designer,
+   * so the two are deliberately different and must not share a label.
+   */
+  moistureRate: string;
   duty: string;
+  /**
+   * Shaft power of rotating plant — fans, pumps.
+   *
+   * Distinct from `duty`: a fan is specified in horsepower, not MBH, and the
+   * heat it adds to the airstream is derived from it rather than entered.
+   */
+  power: string;
   altitude: string;
   relativeHumidity: string;
 }
@@ -49,7 +64,9 @@ export const LABELS: Record<UnitSystem, UnitLabels> = {
     vapourPressure: 'psia',
     airflow: 'CFM',
     massFlow: 'lb/h',
+    moistureRate: 'lb/h',
     duty: 'MBH',
+    power: 'HP',
     altitude: 'ft',
     relativeHumidity: '%',
   },
@@ -63,7 +80,9 @@ export const LABELS: Record<UnitSystem, UnitLabels> = {
     vapourPressure: 'Pa',
     airflow: 'L/s',
     massFlow: 'kg/s',
+    moistureRate: 'kg/h',
     duty: 'kW',
+    power: 'kW',
     altitude: 'm',
     relativeHumidity: '%',
   },
@@ -223,7 +242,9 @@ export const DEFAULTS: Record<UnitSystem, SystemDefaults> = {
       vapourPressure: 4,
       airflow: 0,
       massFlow: 0,
+      moistureRate: 1,
       duty: 1,
+      power: 2,
       altitude: 0,
       relativeHumidity: 1,
     },
@@ -242,9 +263,83 @@ export const DEFAULTS: Record<UnitSystem, SystemDefaults> = {
       vapourPressure: 1,
       airflow: 0,
       massFlow: 3,
+      moistureRate: 1,
       duty: 2,
+      power: 2,
       altitude: 0,
       relativeHumidity: 1,
     },
   },
 };
+
+
+/* -------------------------------------------------------------------------- *
+ * Conversion between unit systems
+ *
+ * Used when the user switches systems: the stored project holds numbers in one
+ * system's units, and they have to become the equivalent numbers in the other.
+ * Without this, 95 °F silently becomes 95 °C.
+ * -------------------------------------------------------------------------- */
+
+/** One horsepower in kilowatts. */
+export const HP_TO_KW = 0.745699872;
+
+/** One MBH (1000 Btu/h) in kilowatts. */
+export const MBH_TO_KW = 0.29307107;
+
+/** One cubic foot per minute in litres per second. */
+export const CFM_TO_LPS = 0.4719474432;
+
+/** One pound in kilograms. */
+export const LB_TO_KG = 0.45359237;
+
+/** An absolute temperature, °F ↔ °C. */
+export function convertTemperature(value: number, from: UnitSystem, to: UnitSystem): number {
+  if (from === to) return value;
+  return from === 'IP' ? fahrenheitToCelsius(value) : celsiusToFahrenheit(value);
+}
+
+/** A temperature *difference*, which scales without the 32° offset. */
+export function convertTemperatureDelta(
+  value: number,
+  from: UnitSystem,
+  to: UnitSystem,
+): number {
+  if (from === to) return value;
+  return from === 'IP' ? deltaFahrenheitToCelsius(value) : deltaCelsiusToFahrenheit(value);
+}
+
+/** Volumetric airflow, CFM ↔ L/s. */
+export function convertAirflow(value: number, from: UnitSystem, to: UnitSystem): number {
+  if (from === to) return value;
+  return from === 'IP' ? value * CFM_TO_LPS : value / CFM_TO_LPS;
+}
+
+/** Thermal duty, MBH ↔ kW. */
+export function convertDuty(value: number, from: UnitSystem, to: UnitSystem): number {
+  if (from === to) return value;
+  return from === 'IP' ? value * MBH_TO_KW : value / MBH_TO_KW;
+}
+
+/** Shaft power, HP ↔ kW. */
+export function convertPower(value: number, from: UnitSystem, to: UnitSystem): number {
+  if (from === to) return value;
+  return from === 'IP' ? value * HP_TO_KW : value / HP_TO_KW;
+}
+
+/** Moisture rate, lb/h ↔ kg/h. Per hour in both systems. */
+export function convertMoistureRate(value: number, from: UnitSystem, to: UnitSystem): number {
+  if (from === to) return value;
+  return from === 'IP' ? value * LB_TO_KG : value / LB_TO_KG;
+}
+
+/**
+ * Fan shaft power expressed as a thermal duty.
+ *
+ * A fan is specified in horsepower (IP) or kilowatts (SI); the heat it delivers
+ * to the airstream is that power, expressed in the system's duty units.
+ */
+export function powerAsDuty(power: number, units: UnitSystem): number {
+  // IP: 1 HP = 2544.43 Btu/h = 2.54443 MBH. SI: kW is already the duty unit.
+  return units === 'IP' ? (power * HP_TO_KW) / MBH_TO_KW : power;
+}

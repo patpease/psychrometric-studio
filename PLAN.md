@@ -855,3 +855,52 @@ checked against the raw boundary solver so the two cannot drift apart.
   has no data source.
 - Comfort inputs are not yet in the project schema's `comfort` block, so they do
   not survive save/load. Wire that up in Phase 7.
+
+
+---
+
+## 18. Review feedback, applied 2026-08-22
+
+Four comments after Phase 3. All four addressed before Phase 4; one exposed a
+fifth defect.
+
+1. **Fan power is shaft power, not duty.** A fan is specified in **HP (IP)** or
+   **kW (SI)**, and the heat it adds to the air is derived from it. Previously
+   the field took a thermal duty in MBH, which understated fan heat by a factor
+   of 2.54 for anyone who typed a horsepower figure into it. `power` is now a
+   distinct unit kind from `duty` throughout.
+
+2. **Switching unit systems did not convert the project — a real bug.** Labels
+   changed from °F to °C while the stored values stayed put, so 95 °F was read
+   as 95 °C: off the chart entirely, which is why the graph went blank. Every
+   stored number now converts — stage parameters, airflows, site altitude,
+   entered pressure, and the comfort inputs. Each field declares how it
+   converts in `stageFields.ts`, so there is no second list to drift out of
+   step, and `mrtOffset` correctly converts as a temperature *difference*
+   rather than an absolute. Covered by `tests/convert-units.test.ts`, which
+   solves the same system in both systems and asserts they describe the same
+   air.
+
+3. **Collapsible panel sections.** Requested for later; done now, because the
+   right-hand panel already carries five sections and Phases 4–6 add more.
+   Built on `<details>`/`<summary>` so it stays keyboard-operable without ARIA
+   bookkeeping.
+
+4. **Loads and temperatures now calculate both ways in the dialog.** The solver
+   always accepted either; what was missing was seeing the answer. A field the
+   user has not set now shows what it works out to as a **placeholder** — so an
+   unset field still reads as unset, rather than the tool appearing to have
+   made a choice on the engineer's behalf. Declared per field via `derive`.
+
+5. **Found while fixing (1): moisture rate was mislabelled.** It is computed
+   per *hour* in both unit systems — a humidifier rate quoted per second is
+   useless — but SI displayed it against `massFlow`, whose label is `kg/s`.
+   Humidification read "10.1 kg/s" when it was 10.1 kg/h, wrong by 3600.
+   `moistureRate` is now its own labelled quantity.
+
+### Deferred by agreement
+
+**Equipment icons.** Phase 4 roughly doubles the equipment list, so one icon
+pass across all types will be more coherent than two partial ones. The
+registry in `processes/registry.ts` is where a type → icon mapping belongs when
+the artwork arrives.

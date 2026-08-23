@@ -329,9 +329,11 @@ describe('mixing', () => {
 
 describe('fan heat', () => {
   it('raises dry bulb at constant humidity ratio', () => {
+    // Fan power is entered as **shaft power** — HP in IP — and the heat added
+    // is derived from it. 2 HP is 5.089 MBH.
     const solved = solveOne([
       { id: 'sa', type: 'source', airflow: 2000, params: { tdb: 55, rh: 0.9 } },
-      { id: 'sf', type: 'fan', params: { power: 5 } },
+      { id: 'sf', type: 'fan', params: { power: 2 } },
     ]);
 
     const entering = resultAt(solved, 0);
@@ -339,24 +341,46 @@ describe('fan heat', () => {
 
     expect(leaving.state.w).toBeCloseTo(entering.state.w, 12);
     expect(leaving.state.tdb).toBeGreaterThan(entering.state.tdb);
-    expect(leaving.duty.total).toBeCloseTo(5, 6);
-    // A modest fan produces a rise of a degree or two, not ten.
-    expect(leaving.state.tdb - entering.state.tdb).toBeGreaterThan(0.2);
-    expect(leaving.state.tdb - entering.state.tdb).toBeLessThan(3);
+    expect(leaving.duty.total).toBeCloseTo(2 * 2.5444336, 4);
+    // A 2 HP fan on 2000 CFM is a couple of degrees, not ten.
+    expect(leaving.state.tdb - entering.state.tdb).toBeGreaterThan(1);
+    expect(leaving.state.tdb - entering.state.tdb).toBeLessThan(4);
+  });
+
+  it('converts horsepower to duty rather than treating it as duty', () => {
+    // The distinction that matters: 2 "power" is 2 HP = 5.089 MBH, not 2 MBH.
+    // Treating shaft power as a thermal duty understates fan heat 2.5-fold.
+    const solved = solveOne([
+      { id: 'sa', type: 'source', airflow: 2000, params: { tdb: 55, rh: 0.9 } },
+      { id: 'sf', type: 'fan', params: { power: 2 } },
+    ]);
+    expect(resultAt(solved, 1).duty.total).toBeGreaterThan(2);
   });
 
   it('delivers less heat when the motor is outside the airstream', () => {
     const inside = solveOne([
       { id: 'sa', type: 'source', airflow: 2000, params: { tdb: 55, rh: 0.9 } },
-      { id: 'sf', type: 'fan', params: { power: 5, motorInAirstream: true } },
+      { id: 'sf', type: 'fan', params: { power: 2, motorInAirstream: true } },
     ]);
     const outside = solveOne([
       { id: 'sa', type: 'source', airflow: 2000, params: { tdb: 55, rh: 0.9 } },
-      { id: 'sf', type: 'fan', params: { power: 5, motorInAirstream: false, motorEfficiency: 0.9 } },
+      { id: 'sf', type: 'fan', params: { power: 2, motorInAirstream: false, motorEfficiency: 0.9 } },
     ]);
 
-    expect(resultAt(outside, 1).duty.total).toBeCloseTo(4.5, 6);
+    expect(resultAt(outside, 1).duty.total).toBeCloseTo(2 * 2.5444336 * 0.9, 4);
     expect(resultAt(outside, 1).duty.total).toBeLessThan(resultAt(inside, 1).duty.total);
+  });
+
+  it('SI fan power in kW is already a duty', () => {
+    // No conversion factor in SI: a 1.5 kW fan delivers 1.5 kW to the air.
+    const solved = solveOne(
+      [
+        { id: 'sa', type: 'source', airflow: 1000, params: { tdb: 13, rh: 0.9 } },
+        { id: 'sf', type: 'fan', params: { power: 1.5 } },
+      ],
+      'SI',
+    );
+    expect(resultAt(solved, 1).duty.total).toBeCloseTo(1.5, 6);
   });
 });
 
@@ -538,7 +562,7 @@ describe('energy balance closes — the Phase 2 gate', () => {
         OUTDOOR_AIR,
         { id: 'cc', type: 'cooling', params: { power: 120, shr: 0.6 } },
         { id: 'rh', type: 'heating', params: { tdbOut: 65 } },
-        { id: 'sf', type: 'fan', params: { power: 4 } },
+        { id: 'sf', type: 'fan', params: { power: 1.5 } },
         { id: 'rm', type: 'room', params: { sensible: 45, latent: 12 } },
       ],
     },

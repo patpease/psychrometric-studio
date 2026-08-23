@@ -13,11 +13,13 @@ import { AVAILABLE_STAGE_TYPES, displayNameFor } from '../processes/registry.js'
 import type { UnitSystem } from '../psych/units.js';
 import {
   STAGE_FIELDS,
+  formatDerived,
   fromFieldValue,
   toFieldValue,
   unitLabelFor,
   type ParamField,
 } from './stageFields.js';
+import type { StageResult } from '../processes/types.js';
 import { LABELS } from '../psych/units.js';
 
 export interface ChainEditorProps {
@@ -48,7 +50,8 @@ function newStage(type: StageType, index: number): Stage {
     case 'humidifier-adiabatic':
       return { ...base, params: { effectiveness: 0.85 } };
     case 'fan':
-      return { ...base, params: { power: 2, motorInAirstream: true } };
+      // Shaft power: HP in IP, kW in SI. A typical 2000 CFM fan is 1-2 HP.
+      return { ...base, params: { power: 1.5, motorInAirstream: true } };
     case 'room':
       return { ...base, params: { sensible: 40, latent: 10 } };
     default:
@@ -60,16 +63,30 @@ function Field({
   field,
   stage,
   units,
+  result,
   onChange,
 }: {
   field: ParamField;
   stage: Stage;
   units: UnitSystem;
+  result?: StageResult | undefined;
   onChange: (key: string, value: number | boolean | undefined) => void;
 }): React.JSX.Element {
   const raw = (stage.params ?? {})[field.key];
   const unit = unitLabelFor(field, units);
   const id = `${stage.id}-${field.key}`;
+
+  /**
+   * When the user defined the stage the other way — a capacity instead of a
+   * leaving temperature, say — show what this field works out to.
+   *
+   * It appears as a placeholder rather than a value, so the field still reads
+   * as unset. Filling it in would make the tool look like it had made a choice
+   * on the engineer's behalf.
+   */
+  const isSet = typeof raw === 'number' && Number.isFinite(raw);
+  const derived = !isSet && result && field.derive ? field.derive(result) : undefined;
+  const hasDerived = typeof derived === 'number' && Number.isFinite(derived);
 
   if (field.kind === 'boolean') {
     return (
@@ -89,7 +106,7 @@ function Field({
   }
 
   return (
-    <div className="param">
+    <div className={`param${hasDerived ? ' param-derived' : ''}`}>
       <label htmlFor={id}>
         {field.label}
         {unit && <span className="param-unit">{unit}</span>}
@@ -98,10 +115,11 @@ function Field({
         id={id}
         type="number"
         step={field.step ?? 1}
-        placeholder={field.placeholder ?? '—'}
+        placeholder={hasDerived ? formatDerived(derived, field) : (field.placeholder ?? '—')}
         value={toFieldValue(raw, field)}
         onChange={(event) => onChange(field.key, fromFieldValue(event.target.value, field))}
       />
+      {hasDerived && <p className="param-derived-note">calculated</p>}
       {field.help && <p className="param-help">{field.help}</p>}
     </div>
   );
@@ -203,6 +221,7 @@ export function ChainEditor({
                       field={field}
                       stage={stage}
                       units={units}
+                      result={result?.result}
                       onChange={(key, value) => {
                         const params = { ...(stage.params ?? {}) };
                         if (value === undefined) delete params[key];

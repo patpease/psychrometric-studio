@@ -143,11 +143,11 @@ export function ResultsPanel({
           </dd>
           <dt>Humidification</dt>
           <dd>
-            {fmt(totals.humidification)} {LABELS[units].massFlow}
+            {fmt(totals.humidification)} {LABELS[units].moistureRate}
           </dd>
           <dt>Dehumidification</dt>
           <dd>
-            {fmt(totals.dehumidification)} {LABELS[units].massFlow}
+            {fmt(totals.dehumidification)} {LABELS[units].moistureRate}
           </dd>
         </dl>
 

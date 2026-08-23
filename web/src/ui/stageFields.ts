@@ -8,6 +8,7 @@
  * explain what a given stage still needs.
  */
 import type { StageType } from '../types/project.js';
+import type { StageResult } from '../processes/types.js';
 import type { UnitSystem } from '../psych/units.js';
 import { LABELS } from '../psych/units.js';
 
@@ -18,9 +19,35 @@ export interface ParamField {
   readonly label: string;
   readonly kind: FieldKind;
   /** Which unit label to show, if any. */
-  readonly unit?: 'temperature' | 'duty' | 'airflow' | 'massFlow' | 'humidityRatio' | 'enthalpy';
+  readonly unit?:
+    | 'temperature'
+    | 'duty'
+    | 'power'
+    | 'airflow'
+    | 'moistureRate'
+    | 'humidityRatio'
+    | 'enthalpy';
+  /**
+   * How this value converts when the user switches unit systems.
+   *
+   * Defaults to the field's `unit`. Dimensionless fields (SHR, effectiveness,
+   * relative humidity) declare `'none'` and are carried across unchanged.
+   */
+  readonly convert?: 'temperature' | 'temperatureDelta' | 'duty' | 'power' | 'airflow' | 'moistureRate' | 'none';
   readonly step?: number;
   readonly placeholder?: string;
+  /**
+   * What this field works out to when the user specified the *other* way of
+   * defining the stage.
+   *
+   * Most stages can be defined by a leaving condition or by a capacity. Once
+   * one is given, the other is determined — and showing it is the difference
+   * between a form and a calculator. It is surfaced as a **placeholder**, so an
+   * empty field still reads as "not specified" while telling you the answer.
+   *
+   * Percent fields return the stored fraction; the formatter scales it.
+   */
+  readonly derive?: (result: StageResult) => number | undefined;
   /** Shown under the field. Keep to one short sentence. */
   readonly help?: string;
 }
@@ -44,10 +71,10 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
       'here, so the quality of this input sets the quality of the whole analysis.',
     alternatives: 'Give dry bulb plus any one of the other properties.',
     fields: [
-      { key: 'tdb', label: 'Dry bulb', ...TEMPERATURE },
-      { key: 'rh', label: 'Relative humidity', ...PERCENT },
-      { key: 'twb', label: 'Wet bulb', ...TEMPERATURE },
-      { key: 'tdp', label: 'Dew point', ...TEMPERATURE },
+      { key: 'tdb', label: 'Dry bulb', ...TEMPERATURE, derive: (r) => r.state.tdb },
+      { key: 'rh', label: 'Relative humidity', ...PERCENT, derive: (r) => r.state.rh },
+      { key: 'twb', label: 'Wet bulb', ...TEMPERATURE, derive: (r) => r.state.twb },
+      { key: 'tdp', label: 'Dew point', ...TEMPERATURE, derive: (r) => r.state.tdp },
     ],
   },
 
@@ -69,15 +96,20 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
     alternatives:
       'Either leaving conditions, or a capacity with a sensible heat ratio — not both.',
     fields: [
-      { key: 'tdbOut', label: 'Leaving dry bulb', ...TEMPERATURE },
-      { key: 'rhOut', label: 'Leaving RH', ...PERCENT },
-      { key: 'power', label: 'Total capacity', ...DUTY },
+      { key: 'tdbOut', label: 'Leaving dry bulb', ...TEMPERATURE, derive: (r) => r.state.tdb },
+      { key: 'rhOut', label: 'Leaving RH', ...PERCENT, derive: (r) => r.state.rh },
+      {
+        key: 'power',
+        label: 'Total capacity',
+        ...DUTY,
+        derive: (r) => Math.abs(r.duty.total),
+      },
       {
         key: 'shr',
         label: 'Coil SHR',
         kind: 'number',
         step: 0.05,
-        placeholder: '0.85',
+        derive: (r) => (Number.isFinite(r.duty.shr) ? r.duty.shr : undefined),
         help: 'Fraction of the total capacity that is sensible.',
       },
     ],
@@ -89,8 +121,8 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
       'exchanged, so relative humidity falls as the air warms.',
     alternatives: 'Either a leaving temperature or a capacity.',
     fields: [
-      { key: 'tdbOut', label: 'Leaving dry bulb', ...TEMPERATURE },
-      { key: 'power', label: 'Capacity', ...DUTY },
+      { key: 'tdbOut', label: 'Leaving dry bulb', ...TEMPERATURE, derive: (r) => r.state.tdb },
+      { key: 'power', label: 'Capacity', ...DUTY, derive: (r) => r.duty.total },
     ],
   },
 
@@ -100,8 +132,15 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
       'a near-vertical climb — near-vertical, not vertical.',
     alternatives: 'Either a target relative humidity or a moisture rate.',
     fields: [
-      { key: 'rhOut', label: 'Leaving RH', ...PERCENT },
-      { key: 'moistureRate', label: 'Moisture rate', kind: 'number', unit: 'massFlow', step: 1 },
+      { key: 'rhOut', label: 'Leaving RH', ...PERCENT, derive: (r) => r.state.rh },
+      {
+        key: 'moistureRate',
+        label: 'Moisture rate',
+        kind: 'number',
+        unit: 'moistureRate',
+        step: 1,
+        derive: (r) => r.moistureRate,
+      },
     ],
   },
 
@@ -117,7 +156,7 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
         ...PERCENT,
         help: 'Fraction of the wet-bulb depression achieved. Never above 100%.',
       },
-      { key: 'rhOut', label: 'Leaving RH', ...PERCENT },
+      { key: 'rhOut', label: 'Leaving RH', ...PERCENT, derive: (r) => r.state.rh },
     ],
   },
 
@@ -126,7 +165,14 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
       'Fan and motor losses enter the airstream as sensible heat. Typically 0.5–2°F, ' +
       'and routinely forgotten — after which the space runs warm at design load.',
     fields: [
-      { key: 'power', label: 'Fan power', ...DUTY, step: 0.5 },
+      {
+        key: 'power',
+        label: 'Fan power',
+        kind: 'number',
+        unit: 'power',
+        step: 0.25,
+        help: 'Shaft power. The heat added to the air is calculated from it.',
+      },
       {
         key: 'motorInAirstream',
         label: 'Motor in airstream',
@@ -141,8 +187,8 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
       'Supply air absorbs the space gains. The slope of this line is the room ' +
       'sensible heat ratio, fixed by the loads rather than chosen.',
     fields: [
-      { key: 'sensible', label: 'Sensible load', ...DUTY },
-      { key: 'latent', label: 'Latent load', ...DUTY },
+      { key: 'sensible', label: 'Sensible load', ...DUTY, derive: (r) => r.duty.sensible },
+      { key: 'latent', label: 'Latent load', ...DUTY, derive: (r) => r.duty.latent },
     ],
   },
 };
@@ -173,4 +219,19 @@ export function fromFieldValue(text: string, field: ParamField): number | undefi
   const value = Number.parseFloat(text);
   if (!Number.isFinite(value)) return undefined;
   return field.kind === 'percent' ? value / 100 : value;
+}
+
+
+/**
+ * Format a derived value for use as a field placeholder.
+ *
+ * Deliberately terse: it sits inside an input box, where a long string would be
+ * clipped. Percent fields are scaled here to match how they are edited.
+ */
+export function formatDerived(value: number, field: ParamField): string {
+  const shown = field.kind === 'percent' ? value * 100 : value;
+  if (!Number.isFinite(shown)) return '—';
+  const magnitude = Math.abs(shown);
+  const digits = magnitude >= 100 ? 0 : magnitude >= 10 ? 1 : 2;
+  return shown.toFixed(digits);
 }

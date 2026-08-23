@@ -12,9 +12,13 @@ import {
   type StageResult,
 } from '../types.js';
 import { applySensibleDuty, resolveFlow, splitDuty } from '../duty.js';
+import { powerAsDuty, LABELS } from '../../psych/units.js';
 
 export interface FanParams {
-  /** Fan power, MBH | kW. */
+  /**
+   * Fan shaft power, **HP (IP) | kW (SI)** — how a fan is actually specified.
+   * The heat delivered to the airstream is derived from it, not entered.
+   */
   readonly power: number;
   /**
    * Whether the motor sits in the airstream. When it does, motor losses reach
@@ -53,7 +57,9 @@ export const fanModel: ProcessModel<FanParams> = {
       'Fan',
     );
 
-    const toAir = params.motorInAirstream ? params.power : params.power * params.motorEfficiency;
+    // Shaft power becomes a thermal duty: 1 HP = 2.5444 MBH; kW is already kW.
+    const dutyInput = powerAsDuty(params.power, units);
+    const toAir = params.motorInAirstream ? dutyInput : dutyInput * params.motorEfficiency;
     const leaving = applySensibleDuty(entering, massFlow, toAir, pressure, units);
 
     return {
@@ -63,8 +69,9 @@ export const fanModel: ProcessModel<FanParams> = {
       duty: splitDuty(entering, leaving, massFlow, units),
       moistureRate: 0,
       note: params.motorInAirstream
-        ? 'All fan and motor heat enters the airstream.'
-        : `Motor outside the airstream; ${(params.motorEfficiency * 100).toFixed(0)}% of input reaches the air.`,
+        ? `${params.power} ${LABELS[units].power} — all fan and motor heat enters the airstream.`
+        : `${params.power} ${LABELS[units].power}; motor outside the airstream, so ` +
+          `${(params.motorEfficiency * 100).toFixed(0)}% of input reaches the air.`,
       warnings: leaving.warnings.map((warning) => warning.message),
     };
   },
