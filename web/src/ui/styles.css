@@ -1078,3 +1078,104 @@ body {
   stroke-width: 2.5px;
   stroke-linejoin: round;
 }
+
+/* --------------------------------------------------------- weather layer */
+
+.weather-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The chart sits above the canvas, and must not paint over it. */
+.chart-pane .psych-chart {
+  position: relative;
+}
+
+.chart-pane .psych-chart .plot-background {
+  fill: none;
+}
+
+.dropzone {
+  padding: 1.25rem 0.75rem;
+  border: 1.5px dashed var(--border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.dropzone:hover,
+.dropzone.over {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg);
+}
+
+.density-legend {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0.5rem 0;
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+}
+
+.density-swatch {
+  width: 16px;
+  height: 10px;
+}
+
+.density-legend span:first-child {
+  margin-right: 0.3rem;
+}
+
+.density-legend span:last-child {
+  margin-left: 0.3rem;
+}
+
+.zone-stat {
+  margin-bottom: 0.7rem;
+}
+
+.zone-stat-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+}
+
+.zone-stat-bar {
+  height: 6px;
+  margin: 0.2rem 0;
+  border-radius: 3px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.zone-stat-bar span {
+  display: block;
+  height: 100%;
+  background: var(--process);
+}
+
+.zone-stat-detail {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.citation {
+  margin: 0.75rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.citation a,
+.comfort-note a {
+  color: var(--accent);
+}

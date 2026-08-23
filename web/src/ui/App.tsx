@@ -28,6 +28,9 @@ import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
 import { ChainEditor } from './ChainEditor.js';
 import { Collapsible } from './Collapsible.js';
+import { WeatherPanel, initialWeatherState, type WeatherState } from './WeatherPanel.js';
+import { WeatherLayer } from '../chart/WeatherLayer.js';
+import { convertHoursTo } from '../weather/epw.js';
 import { convertAltitude, convertComfort, convertStages } from './convertProject.js';
 import {
   ComfortPanel,
@@ -101,6 +104,24 @@ export function App(): React.JSX.Element {
   const [stages, setStages] = useState<Stage[]>(() => STARTER_SYSTEM);
   const [selectedStage, setSelectedStage] = useState<number | null>(null);
   const [comfort, setComfort] = useState<ComfortSettingsState>(() => defaultComfortSettings('IP'));
+  const [weather, setWeather] = useState<WeatherState>(initialWeatherState);
+
+  /**
+   * Whether the page is in its dark theme.
+   *
+   * The canvas layer paints raw colours rather than CSS variables — a canvas
+   * cannot resolve `var(--…)` — so it has to be told which palette applies, and
+   * kept in step when the system preference changes underneath it.
+   */
+  const [dark, setDark] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = (): void => setDark(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   const [sizeRef, size] = useElementSize();
   const limits = useMemo(() => domainLimits(units), [units]);
@@ -136,6 +157,11 @@ export function App(): React.JSX.Element {
 
     setStages((current) => convertStages(current, from, next));
     setComfort((current) => convertComfort(current, from, next));
+    // Weather hours are stored in the display system too, so they convert with
+    // everything else rather than being silently reinterpreted.
+    setWeather((current) =>
+      current.file ? { ...current, file: convertHoursTo(current.file, next) } : current,
+    );
     setAltitude((current) => convertAltitude(current, from, next));
     setExplicitPressure((current) => {
       const parsed = Number.parseFloat(current);
@@ -280,6 +306,14 @@ export function App(): React.JSX.Element {
           onPointerUp={interaction.onPointerUp}
           onPointerLeave={interaction.onPointerLeave}
         >
+          <WeatherLayer
+            hours={weather.file?.hours ?? []}
+            mode={weather.mode}
+            domain={domain}
+            width={size.width}
+            height={size.height}
+            dark={dark}
+          />
           <Chart
             domain={domain}
             pressure={atmosphere.pressure}
@@ -299,6 +333,24 @@ export function App(): React.JSX.Element {
         </div>
 
         <aside className="panel panel-right">
+          <Collapsible
+            title="Weather data"
+            defaultOpen={false}
+            badge={weather.file ? `${weather.file.hours.length.toLocaleString()} h` : undefined}
+          >
+            <WeatherPanel
+              state={weather}
+              onChange={setWeather}
+              units={units}
+              zones={zones}
+              dark={dark}
+              onAdoptElevation={(elevation) => {
+                setPressureMode('altitude');
+                setAltitude(Math.round(elevation));
+              }}
+            />
+          </Collapsible>
+
           <Collapsible title="Thermal comfort" defaultOpen>
             <ComfortPanel
             settings={comfort}

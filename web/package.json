@@ -22,6 +22,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "jsthermalcomfort": "^1.4.0",
     "psychrolib-vendored": "file:vendor",
     "react": "^19.2.8",

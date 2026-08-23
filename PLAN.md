@@ -516,7 +516,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | 2 | State points and core process chain, loads, drag interaction | ✅ **Complete** — balance closes on four chains; see §16 |
 | 3 | Comfort module — PMV/PPD, polygon, adaptive chart | ✅ **Complete** — zone boundaries match published ASHRAE 55; see §17 |
 | 4 | Coil detail, energy recovery, advanced processes | ✅ **Complete** — both guards proven; see §19 |
-| 5 | EPW import, scatter, density bins, hours-in-zone | 8,760 points pan at 60 fps |
+| 5 | EPW import, scatter, density bins, hours-in-zone | ✅ **Complete** — real TMYx file parses clean; see §20 |
 | 6 | Education — walkthrough engine + first two walkthroughs | A new engineer completes one unaided |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF API | Round-trip save/load fidelity |
 | 8 | Deploy, docs, calculation reference, polish | Public URL live |
@@ -981,3 +981,78 @@ airstreams in equal and opposite amounts, by construction, and are then checked.
 - `solveCoil` returns null-with-a-reason rather than throwing, matching
   `comfortZone`. Phase 5's weather binning should follow the same pattern for
   an EPW file that fails to parse.
+
+
+---
+
+## 20. Phase 5 outcome
+
+*Completed 2026-08-23. 369 tests passing, verified against a real TMYx file.*
+
+Delivered: EPW and ZIP import, the 8,760-hour scatter and density map on a
+canvas layer, month and hour-of-day filtering, and hours-in-zone statistics
+with a breakdown of how the remaining hours miss.
+
+### Verification
+
+A real Denver TMYx download (`USA_CO_Denver.Intl.AP.725650_TMYx.2009-2023`)
+parses with **all 8,760 hours and no problems**. Station pressure reads
+80,972–84,971 Pa — correctly around 82 kPa for 1,650 m rather than sea level,
+which confirms the per-hour pressure handling. 4.9% of hours fall in the summer
+comfort zone, 6,797 too cool and 1,019 too warm: a recognisable high-desert
+profile. Binning the full year takes 6 ms.
+
+### The stretch goal: deferred, and why
+
+**Climate.OneBuilding sends no `Access-Control-Allow-Origin` header**, verified
+directly from a browser page: `fetch('https://climate.onebuilding.org/')` fails
+outright. No front-end code changes that — the host would have to opt in.
+
+A server-side proxy would work, and carries three costs that make it a feature
+in its own right rather than a stretch on this one:
+
+1. It breaks the promise that the application works with the API down.
+2. It re-hosts a free academic service's bandwidth without asking. If built, it
+   should start with an email to the maintainers.
+3. There is no search API to proxy — the site is a directory tree of static
+   files, so a usable "pick your city" needs a scraped station index of several
+   thousand entries, kept current.
+
+Deferred to a later version, as agreed. The manual path is the supported one and
+is deliberately good: direct link, drag-and-drop, `.zip` opened for you, and the
+station's elevation adopted as the chart pressure in one click. Written up in
+`docs/weather-data.md`.
+
+### Findings
+
+1. **EPW's missing-data markers are values, not blanks.** `99.9` °C and `999%`
+   RH are plausible-looking numbers that would sit far off the chart and drag
+   every statistic with them. Rows carrying one for a needed field are dropped
+   and counted. A missing *pressure* falls back to the standard atmosphere at
+   the **site elevation**, not to sea level — which for a station at 1,650 m
+   would misplace every point.
+
+2. **Humidity ratio must use each hour's own station pressure.** Denver's file
+   varies between 81 and 85 kPa across the year. Using a single site pressure —
+   let alone sea level — is a visible error at altitude. Because the chart's
+   relative-humidity lines are drawn at the *chart* pressure, the panel offers
+   to adopt the file's elevation so the two agree.
+
+3. **A hot humid hour is first of all hot.** The initial classification checked
+   humidity before temperature, so 35 °C at 40% RH — above an ASHRAE 55 zone's
+   humidity cap — came out as "too humid". That would argue for dehumidification
+   when what is needed is cooling. Temperature is now attributed first, and the
+   test that caught it is the reason the buckets are worth trusting.
+
+4. **The density grid bins against the view, not the data.** Binning to the
+   data's own extent would change what a cell means as the user zooms, and a
+   density map whose units shift underneath you is worse than none.
+
+### Carried into Phase 6
+
+- `dailyMeansBefore` is written and tested but not yet wired to the adaptive
+  comfort panel, which still takes a typed prevailing temperature. Connecting
+  the two is a small job and makes the adaptive model genuinely useful.
+- Weather state is not in the project schema, so it does not survive save/load.
+  An EPW is large; the file should be re-selected rather than embedded. Decide
+  in Phase 7.

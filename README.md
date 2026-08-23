@@ -14,10 +14,10 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 4 complete** — an interactive psychrometric chart, seventeen equipment
-types solved as a chain with verified energy balance, coil apparatus dew point
-and bypass factor, energy recovery, and ASHRAE 55 thermal comfort. Weather data
-is Phase 5. See [PLAN.md](PLAN.md) for the full roadmap.
+**Phase 5 complete** — an interactive psychrometric chart, seventeen equipment
+types solved as a chain with verified energy balance, ASHRAE 55 thermal comfort,
+and EPW weather import with density mapping and hours-in-zone statistics.
+Education is Phase 6. See [PLAN.md](PLAN.md) for the full roadmap.
 
 | Phase | Deliverable | Status |
 |---|---|---|
@@ -26,8 +26,8 @@ is Phase 5. See [PLAN.md](PLAN.md) for the full roadmap.
 | 2 | State points and core process chain | ✅ done |
 | 3 | Comfort module — PMV/PPD, comfort polygon, adaptive | ✅ done |
 | 4 | Coil detail, energy recovery, advanced processes | ✅ done |
-| 5 | EPW import, scatter, density bins, hours-in-zone | next |
-| 6 | Education — walkthrough engine and content | |
+| 5 | EPW import, scatter, density bins, hours-in-zone | ✅ done |
+| 6 | Education — walkthrough engine and content | next |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | |
 | 8 | Deploy, docs, polish | |
 
@@ -39,6 +39,7 @@ web/       Vite + TypeScript front end — owns every interactive calculation
   src/chart/     scales, line families, SVG renderer, process overlay
   src/processes/ process models, chain solver, duty accounting
   src/comfort/   ASHRAE 55 PMV/PPD, comfort polygon, adaptive model
+  src/weather/   EPW parsing, density binning, hours-in-zone
   src/config/    branding and legal text (single source of truth)
   src/types/     project file types, mirroring the JSON Schema
   vendor/        vendored PsychroLib + provenance
@@ -88,6 +89,8 @@ cd web && npm run dev
   vendored rather than installed from npm.
 - **[ADR 0002](docs/adr/0002-dual-instance-unit-systems.md)** — why there are
   two PsychroLib instances and why nothing may call `SetUnitSystem`.
+- **[docs/weather-data.md](docs/weather-data.md)** — where weather files come
+  from, how to cite them, and why there is no direct-download button.
 
 Three rules that the tests enforce and that are easy to break by accident:
 
@@ -102,6 +105,14 @@ Three rules that the tests enforce and that are easy to break by accident:
 4. **Enthalpy is not comparable across unit systems.** The IP and SI datums
    differ (0 °F vs 0 °C). Only enthalpy *differences* convert. See
    [calculation-reference §5](docs/calculation-reference.md).
+
+## Weather data
+
+Weather files come from [Climate.OneBuilding.org](https://climate.onebuilding.org/).
+Cite the TMYx data set as:
+
+> Lawrie, Linda K, Drury B Crawley. 2026. *Development of Global Typical
+> Meteorological Years (TMYx)*.
 
 ## Licensing
 

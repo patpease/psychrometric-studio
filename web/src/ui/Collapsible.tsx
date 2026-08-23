@@ -13,7 +13,7 @@ export interface CollapsibleProps {
   /** Open on first render. Sections the user needs most start open. */
   defaultOpen?: boolean;
   /** A short status shown beside the title, visible while collapsed. */
-  badge?: string;
+  badge?: string | undefined;
   children: ReactNode;
 }
 
