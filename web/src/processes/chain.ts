@@ -15,7 +15,18 @@ import type { UnitSystem } from '../psych/units.js';
 import { duty as dutyFromEnthalpy } from '../psych/units.js';
 import type { Airstream, Project, Stage } from '../types/project.js';
 import { MODELS } from './registry.js';
+import type { CouplingRole } from '../types/project.js';
 import { ProcessError, type DutySplit, type StageResult } from './types.js';
+
+/** What a solved airstream exposes to stages in other airstreams. */
+interface ResolvedAirstream {
+  terminal: MoistAirState | null;
+  terminalResult: StageResult | undefined;
+  terminalMassFlow: number | null;
+  byStage: Map<string, MoistAirState>;
+  resultByStage: Map<string, StageResult>;
+  massFlowByStage: Map<string, number>;
+}
 
 /** A stage after solving — either a result or the reason there isn't one. */
 export interface SolvedStage {
@@ -116,7 +127,9 @@ function solveAirstream(
   airstream: Airstream,
   pressure: number,
   units: UnitSystem,
-  resolved: Map<string, { terminal: MoistAirState | null; byStage: Map<string, MoistAirState> }>,
+  resolved: Map<string, ResolvedAirstream>,
+  localResults: Map<string, StageResult>,
+  localMassFlow: Map<string, number>,
 ): SolvedAirstream {
   const stages: SolvedStage[] = [];
   let entering: MoistAirState | null = null;
@@ -138,23 +151,66 @@ function solveAirstream(
     }
 
     // Resolve coupled states before solving, so a missing one fails clearly.
-    const couplings: Parameters<typeof model.apply>[0]['couplings'] = {};
+    const couplings: Partial<Record<CouplingRole, MoistAirState>> = {};
+    const couplingResults: Partial<Record<CouplingRole, StageResult>> = {};
+    const couplingMassFlow: Partial<Record<CouplingRole, number>> = {};
     let couplingError: string | undefined;
 
     for (const coupling of stage.couplings ?? []) {
+      // A coupling may point at this same airstream — the two legs of a
+      // wrap-around coil do — in which case the target is whatever has been
+      // solved so far in this pass rather than a finished airstream.
+      const sameStream = coupling.airstreamId === airstream.id;
       const target = resolved.get(coupling.airstreamId);
-      if (!target) {
+
+      if (!sameStream && !target) {
         couplingError = `Coupled airstream "${coupling.airstreamId}" has not been solved.`;
         break;
       }
-      const state = coupling.stageId ? target.byStage.get(coupling.stageId) : target.terminal;
+
+      let state: MoistAirState | undefined;
+      let result: StageResult | undefined;
+      let flow: number | undefined;
+
+      if (sameStream) {
+        if (!coupling.stageId) {
+          couplingError =
+            'A coupling within the same airstream must name the stage it pairs with.';
+          break;
+        }
+        result = localResults.get(coupling.stageId);
+        state = result?.state;
+        flow = localMassFlow.get(coupling.stageId);
+        if (!result) {
+          couplingError =
+            `Stage "${coupling.stageId}" has not been solved yet. A paired stage ` +
+            'must come earlier in the chain than the stage that references it.';
+          break;
+        }
+      } else {
+        state = coupling.stageId
+          ? target!.byStage.get(coupling.stageId)
+          : (target!.terminal ?? undefined);
+        result = coupling.stageId ? target!.resultByStage.get(coupling.stageId) : target!.terminalResult;
+        flow = coupling.stageId
+          ? target!.massFlowByStage.get(coupling.stageId)
+          : (target!.terminalMassFlow ?? undefined);
+        if (!state) {
+          couplingError = coupling.stageId
+            ? `Stage "${coupling.stageId}" in airstream "${coupling.airstreamId}" produced no state.`
+            : `Airstream "${coupling.airstreamId}" produced no final state.`;
+          break;
+        }
+      }
+
       if (!state) {
-        couplingError = coupling.stageId
-          ? `Stage "${coupling.stageId}" in airstream "${coupling.airstreamId}" produced no state.`
-          : `Airstream "${coupling.airstreamId}" produced no final state.`;
+        couplingError = `Coupling "${coupling.role}" resolved to no state.`;
         break;
       }
+
       couplings[coupling.role] = state;
+      if (result) couplingResults[coupling.role] = result;
+      if (flow !== undefined) couplingMassFlow[coupling.role] = flow;
     }
 
     if (couplingError) {
@@ -174,6 +230,8 @@ function solveAirstream(
           units,
           airflow: stage.airflow,
           couplings,
+          couplingResults,
+          couplingMassFlow,
         },
         params,
       );
@@ -182,6 +240,8 @@ function solveAirstream(
       entering = result.state;
       massFlow = result.massFlow;
       byStage.set(stage.id, result.state);
+      localResults.set(stage.id, result);
+      localMassFlow.set(stage.id, result.massFlow);
     } catch (error) {
       const message =
         error instanceof ProcessError || error instanceof Error
@@ -210,21 +270,39 @@ export function solveProject(
   units: UnitSystem,
 ): SolvedProject {
   const { order, errors } = orderAirstreams(project.airstreams);
-  const resolved = new Map<
-    string,
-    { terminal: MoistAirState | null; byStage: Map<string, MoistAirState> }
-  >();
+  const resolved = new Map<string, ResolvedAirstream>();
   const results = new Map<string, SolvedAirstream>();
 
   for (const airstream of order) {
-    const solved = solveAirstream(airstream, pressure, units, resolved);
+    // Within-stream couplings — the two legs of a wrap-around coil — read from
+    // these as the chain is solved, so they are built per airstream.
+    const localResults = new Map<string, StageResult>();
+    const localMassFlow = new Map<string, number>();
+
+    const solved = solveAirstream(airstream, pressure, units, resolved, localResults, localMassFlow);
     results.set(airstream.id, solved);
 
     const byStage = new Map<string, MoistAirState>();
+    const resultByStage = new Map<string, StageResult>();
+    const massFlowByStage = new Map<string, number>();
+    let terminalResult: StageResult | undefined;
+
     for (const stage of solved.stages) {
-      if (stage.result) byStage.set(stage.stage.id, stage.result.state);
+      if (!stage.result) continue;
+      byStage.set(stage.stage.id, stage.result.state);
+      resultByStage.set(stage.stage.id, stage.result);
+      massFlowByStage.set(stage.stage.id, stage.result.massFlow);
+      terminalResult = stage.result;
     }
-    resolved.set(airstream.id, { terminal: solved.terminal, byStage });
+
+    resolved.set(airstream.id, {
+      terminal: solved.terminal,
+      terminalResult,
+      terminalMassFlow: solved.terminalMassFlow,
+      byStage,
+      resultByStage,
+      massFlowByStage,
+    });
   }
 
   return {

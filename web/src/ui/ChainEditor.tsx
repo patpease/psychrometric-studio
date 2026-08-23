@@ -9,7 +9,7 @@
  */
 import type { Stage, StageType } from '../types/project.js';
 import type { SolvedStage } from '../processes/chain.js';
-import { AVAILABLE_STAGE_TYPES, displayNameFor } from '../processes/registry.js';
+import { STAGE_GROUPS, displayNameFor } from '../processes/registry.js';
 import type { UnitSystem } from '../psych/units.js';
 import {
   STAGE_FIELDS,
@@ -23,6 +23,8 @@ import type { StageResult } from '../processes/types.js';
 import { LABELS } from '../psych/units.js';
 
 export interface ChainEditorProps {
+  /** Id of the airstream being edited, for within-stream couplings. */
+  airstreamId: string;
   stages: readonly Stage[];
   solved: readonly SolvedStage[];
   units: UnitSystem;
@@ -54,6 +56,28 @@ function newStage(type: StageType, index: number): Stage {
       return { ...base, params: { power: 1.5, motorInAirstream: true } };
     case 'room':
       return { ...base, params: { sensible: 40, latent: 10 } };
+    case 'recovery-wheel-sensible':
+    case 'recovery-plate':
+      return { ...base, params: { sensible: 0.7, tdb3: 75, rh3: 0.5, airflow3: 2000 } };
+    case 'recovery-wheel-enthalpy':
+      return {
+        ...base,
+        params: { sensible: 0.75, latent: 0.65, tdb3: 75, rh3: 0.5, airflow3: 2000 },
+      };
+    case 'recovery-runaround':
+      return { ...base, params: { sensible: 0.55, tdb3: 75, rh3: 0.5, airflow3: 2000 } };
+    case 'recovery-wraparound-precool':
+      return { ...base, params: { deltaT: 8 } };
+    case 'recovery-wraparound-reheat':
+      // Pairs with the nearest pre-cool leg above it; the editor wires the
+      // coupling when the stage is added.
+      return { ...base, params: {} };
+    case 'evaporative-direct':
+      return { ...base, params: { effectiveness: 0.85 } };
+    case 'evaporative-indirect':
+      return { ...base, params: { effectiveness: 0.7, secondaryEffectiveness: 0.85 } };
+    case 'desiccant':
+      return { ...base, params: { removal: 0.5 } };
     default:
       return base;
   }
@@ -126,6 +150,7 @@ function Field({
 }
 
 export function ChainEditor({
+  airstreamId,
   stages,
   solved,
   units,
@@ -155,7 +180,34 @@ export function ChainEditor({
   };
 
   const add = (type: StageType): void => {
-    onChange([...stages, newStage(type, stages.length)]);
+    const created = newStage(type, stages.length);
+
+    // A reheat leg is meaningless without the pre-cool leg it mirrors, so wire
+    // the pairing to the most recent unpaired pre-cool leg above it. Leaving
+    // the user to discover the coupling would mean adding a stage that always
+    // errors on arrival.
+    if (type === 'recovery-wraparound-reheat') {
+      const alreadyPaired = new Set(
+        stages.flatMap((stage) =>
+          (stage.couplings ?? [])
+            .filter((coupling) => coupling.role === 'paired-leg')
+            .map((coupling) => coupling.stageId),
+        ),
+      );
+      const partner = [...stages]
+        .reverse()
+        .find(
+          (stage) =>
+            stage.type === 'recovery-wraparound-precool' && !alreadyPaired.has(stage.id),
+        );
+      if (partner) {
+        created.couplings = [
+          { role: 'paired-leg', airstreamId: airstreamId, stageId: partner.id },
+        ];
+      }
+    }
+
+    onChange([...stages, created]);
     onSelect(stages.length);
   };
 
@@ -271,10 +323,15 @@ export function ChainEditor({
           }}
         >
           <option value="">Choose…</option>
-          {AVAILABLE_STAGE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {displayNameFor(type)}
-            </option>
+          {/* Grouped: seventeen equipment types in one flat list is a wall. */}
+          {STAGE_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.types.map((type) => (
+                <option key={type} value={type}>
+                  {displayNameFor(type)}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>

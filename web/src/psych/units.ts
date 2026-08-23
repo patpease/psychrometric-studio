@@ -327,6 +327,22 @@ export function convertPower(value: number, from: UnitSystem, to: UnitSystem): n
   return from === 'IP' ? value * HP_TO_KW : value / HP_TO_KW;
 }
 
+/**
+ * A humidity ratio held in **display** units, gr/lb ↔ g/kg.
+ *
+ * The underlying quantity is dimensionless — lb/lb equals kg/kg — but the
+ * display units differ by a factor of seven, so a stored display value still
+ * has to be rescaled. 70 gr/lb and 10 g/kg are the same air.
+ */
+export function convertHumidityRatioDisplay(
+  value: number,
+  from: UnitSystem,
+  to: UnitSystem,
+): number {
+  if (from === to) return value;
+  return humidityRatioToDisplay(humidityRatioFromDisplay(value, from), to);
+}
+
 /** Moisture rate, lb/h ↔ kg/h. Per hour in both systems. */
 export function convertMoistureRate(value: number, from: UnitSystem, to: UnitSystem): number {
   if (from === to) return value;

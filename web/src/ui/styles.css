@@ -1052,3 +1052,29 @@ body {
   font-size: 0.66rem;
   color: var(--process);
 }
+
+
+/* -------------------------------------------------------- coil construction */
+
+.coil-construction line {
+  stroke: var(--process-selected);
+  stroke-width: 1.25;
+  stroke-dasharray: 5 3;
+  opacity: 0.9;
+}
+
+.coil-construction circle {
+  fill: var(--plot-bg);
+  stroke: var(--process-selected);
+  stroke-width: 2;
+}
+
+.coil-construction text {
+  font-size: 8.5px;
+  font-weight: 600;
+  fill: var(--process-selected);
+  paint-order: stroke;
+  stroke: var(--plot-bg);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}

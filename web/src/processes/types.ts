@@ -8,6 +8,7 @@
  * instance state between calls.
  */
 import type { MoistAirState } from '../psych/state.js';
+import type { CoilConstruction } from './coil.js';
 import type { UnitSystem } from '../psych/units.js';
 import type { CouplingRole, StageType } from '../types/project.js';
 
@@ -59,6 +60,13 @@ export interface StageResult {
   readonly warnings: readonly string[];
   /** Extra states to plot — the second stream of a mixing box, for instance. */
   readonly auxiliary?: readonly AuxiliaryState[];
+  /**
+   * Apparatus dew point and bypass factor, for stages that have them.
+   *
+   * Present on cooling coils. Its `adp` is null when the process line never
+   * reaches saturation, with `problem` saying so.
+   */
+  readonly coil?: CoilConstruction;
 }
 
 /** What a process model is given. */
@@ -73,6 +81,17 @@ export interface ProcessContext {
   readonly airflow?: number | undefined;
   /** Terminal states of coupled airstreams, keyed by the coupling's role. */
   readonly couplings: Partial<Record<CouplingRole, MoistAirState>>;
+  /**
+   * Full results of coupled stages, where the coupling names a specific stage.
+   *
+   * A state alone is not always enough. The reheat leg of a wrap-around coil
+   * has to know how much heat the pre-cool leg removed, which is a property of
+   * the *process*, not of either end state — recovering it from the leaving
+   * state would mean guessing at the entering one.
+   */
+  readonly couplingResults: Partial<Record<CouplingRole, StageResult>>;
+  /** Mass flow of coupled airstreams, for effectiveness with unequal flows. */
+  readonly couplingMassFlow: Partial<Record<CouplingRole, number>>;
 }
 
 /**

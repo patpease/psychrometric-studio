@@ -19,6 +19,7 @@ import {
   type StageResult,
 } from '../types.js';
 import { applyDuty, moistureRate, resolveFlow, splitDuty } from '../duty.js';
+import { solveCoil } from '../coil.js';
 
 export interface CoolingParams {
   readonly tdbOut?: number | undefined;
@@ -123,8 +124,18 @@ export const coolingModel: ProcessModel<CoolingParams> = {
       );
     }
 
+    // The coil construction: where the process line, extended, meets the
+    // saturation curve, and how much air behaves as though it bypassed the
+    // coil. Null when no such point exists, which is a real condition rather
+    // than a failure — see coil.ts.
+    const coil = solveCoil(entering, leaving, pressure, units);
+
     const dryingNote =
       duty.latent < -1e-9 ? 'Sensible and latent cooling.' : 'Sensible cooling only — no condensation.';
+    const coilNote =
+      coil.adp !== null
+        ? ` ADP ${coil.adp.toFixed(1)}°, bypass factor ${coil.bypassFactor!.toFixed(2)}.`
+        : '';
 
     return {
       state: leaving,
@@ -132,8 +143,9 @@ export const coolingModel: ProcessModel<CoolingParams> = {
       airflow,
       duty,
       moistureRate: moistureRate(massFlow, leaving.w - entering.w, units),
-      note: dryingNote,
+      note: dryingNote + coilNote,
       warnings,
+      coil,
     };
   },
 };

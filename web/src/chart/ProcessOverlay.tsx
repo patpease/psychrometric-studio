@@ -134,6 +134,32 @@ export function ProcessOverlay({
         }),
       )}
 
+      {/* Coil construction: the process line extended to the apparatus dew
+          point on the saturation curve. Shown only for the selected stage —
+          drawn for every coil at once it would clutter the chart, and it is a
+          construction you look at deliberately rather than at a glance. */}
+      {stages.map((stage) => {
+        const coil = stage.result!.coil;
+        if (!coil || coil.adp === null || selected !== stage.index) return null;
+
+        const position = stages.indexOf(stage);
+        const from = position > 0 ? stages[position - 1]!.result!.state : null;
+        if (!from) return null;
+
+        const leaving = scales.project(stage.result!.state.tdb, stage.result!.state.w);
+        const adp = scales.project(coil.adpState!.tdb, coil.adpState!.w);
+
+        return (
+          <g key={`adp-${stage.stage.id}`} className="coil-construction">
+            <line x1={leaving.x} y1={leaving.y} x2={adp.x} y2={adp.y} />
+            <circle cx={adp.x} cy={adp.y} r={4} />
+            <text x={adp.x} y={adp.y} dx={-6} dy={-6} textAnchor="end">
+              ADP
+            </text>
+          </g>
+        );
+      })}
+
       {/* State points. */}
       {stages.map((stage, position) => {
         const { x, y } = scales.project(stage.result!.state.tdb, stage.result!.state.w);

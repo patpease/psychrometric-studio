@@ -259,6 +259,7 @@ export function App(): React.JSX.Element {
       <main className="app-body">
         <aside className="panel panel-left">
           <ChainEditor
+            airstreamId="supply"
             stages={stages}
             solved={supply.stages}
             units={units}

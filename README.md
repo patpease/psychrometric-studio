@@ -14,10 +14,10 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 3 complete** — an interactive psychrometric chart, a solved equipment
-chain with verified energy balance, and ASHRAE 55 thermal comfort: PMV/PPD, the
-comfort zone drawn on the chart, and the adaptive model. Coil detail and energy
-recovery are Phase 4. See [PLAN.md](PLAN.md) for the full roadmap.
+**Phase 4 complete** — an interactive psychrometric chart, seventeen equipment
+types solved as a chain with verified energy balance, coil apparatus dew point
+and bypass factor, energy recovery, and ASHRAE 55 thermal comfort. Weather data
+is Phase 5. See [PLAN.md](PLAN.md) for the full roadmap.
 
 | Phase | Deliverable | Status |
 |---|---|---|
@@ -25,8 +25,8 @@ recovery are Phase 4. See [PLAN.md](PLAN.md) for the full roadmap.
 | 1 | Chart engine — all line families, both unit systems, zoom/pan/hover | ✅ done |
 | 2 | State points and core process chain | ✅ done |
 | 3 | Comfort module — PMV/PPD, comfort polygon, adaptive | ✅ done |
-| 4 | Coil detail, energy recovery, advanced processes | next |
-| 5 | EPW import, scatter, density bins, hours-in-zone | |
+| 4 | Coil detail, energy recovery, advanced processes | ✅ done |
+| 5 | EPW import, scatter, density bins, hours-in-zone | next |
 | 6 | Education — walkthrough engine and content | |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | |
 | 8 | Deploy, docs, polish | |

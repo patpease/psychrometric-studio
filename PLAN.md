@@ -515,7 +515,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | 1 | Chart engine — all line families, both unit systems, altitude, zoom/pan/hover | ✅ **Complete** — matches ASHRAE Chart No. 1 at 80/67; see §15 |
 | 2 | State points and core process chain, loads, drag interaction | ✅ **Complete** — balance closes on four chains; see §16 |
 | 3 | Comfort module — PMV/PPD, polygon, adaptive chart | ✅ **Complete** — zone boundaries match published ASHRAE 55; see §17 |
-| 4 | Coil detail, energy recovery, advanced processes | No-ADP and balance guards proven |
+| 4 | Coil detail, energy recovery, advanced processes | ✅ **Complete** — both guards proven; see §19 |
 | 5 | EPW import, scatter, density bins, hours-in-zone | 8,760 points pan at 60 fps |
 | 6 | Education — walkthrough engine + first two walkthroughs | A new engineer completes one unaided |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF API | Round-trip save/load fidelity |
@@ -904,3 +904,80 @@ fifth defect.
 pass across all types will be more coherent than two partial ones. The
 registry in `processes/registry.ts` is where a type → icon mapping belongs when
 the artwork arrives.
+
+
+---
+
+## 19. Phase 4 outcome
+
+*Completed 2026-08-22. 336 tests passing, type check clean, verified in browser.*
+
+Delivered: the apparatus dew point and bypass factor construction; sensible and
+enthalpy wheels, plate exchanger, run-around and wrap-around circuits; direct
+and indirect evaporative cooling; the desiccant idealisation. Seventeen
+equipment types, grouped in the picker.
+
+### The gate
+
+**The no-ADP guard.** A coil asked to remove moisture faster than its
+temperature drop allows produces a process line that never meets the saturation
+curve. `solveCoil` returns an explicit null with a reason, and a sweep across
+160 leaving conditions asserts there is no in-between state — every result is
+either a fully consistent construction or none at all.
+
+**The recovery balance guard.** Energy and moisture both cross between the two
+airstreams in equal and opposite amounts, by construction, and are then checked.
+
+### Findings
+
+1. **The ADP bisection was wrong in a way that produced "no ADP" for ordinary
+   coils.** Extended far enough, a process line runs to negative humidity ratio,
+   where the residual `W_sat − W_line` turns positive again. So the bracket had
+   the same sign at both ends, and a single bisection over the whole range
+   concluded there was no root — for a perfectly normal 80 °F → 55 °F coil. The
+   fix scans *down* from the leaving temperature and takes the **first** sign
+   change; the second crossing is an artefact of extrapolating the line past
+   where it means anything.
+
+2. **Bypass factor is not the same along enthalpy as along temperature.**
+   Textbooks treat T, W, and h as interchangeable. Two of them are exactly so.
+   Enthalpy is not: `h = cp·T + W·(hg + cpv·T)` carries a **T·W cross term**, so
+   h varies bilinearly along a line that is straight in (T, W), and the ratio
+   comes out about 0.3% different. Immaterial in practice, but a test asserting
+   exact agreement asserts something untrue — and someone would eventually
+   "fix" a correct solver to make them match.
+
+3. **Equal effectiveness on temperature does not conserve energy.** Mirroring
+   the supply-side ΔT onto the exhaust stream is the obvious construction and is
+   wrong: the two streams sit at different humidity ratios, so their specific
+   heats differ and an equal ΔT carries unequal energy. The residual was a few
+   per cent — small enough to look like rounding, large enough to be an invented
+   energy source. The exhaust side is now derived from the **energy and moisture
+   transferred**, so both balances hold by construction.
+
+4. **Equal airflow is not equal mass flow, and the test found it before a user
+   did.** 2000 CFM of 95 °F air is 8,362 lb/h; 2000 CFM of 75 °F air is
+   8,772 lb/h. A balance check written against the supply-side mass flow fails
+   by exactly that density difference. Effectiveness is referenced to the
+   smaller of the two mass flows, as the standard defines it.
+
+5. **The wrap-around circuit balances by construction rather than by check.**
+   The reheat leg takes no duty of its own — it reads the pre-cool leg's result
+   through a `paired-leg` coupling and mirrors it. Letting both legs be
+   specified independently would let a user build a passive circuit that
+   violates the first law and see no complaint. The editor wires the pairing
+   automatically when a reheat leg is added, because a stage that always errors
+   on arrival is not a feature.
+
+### Carried into Phase 5
+
+- Recovery devices solve **this** airstream and report the other side as
+  auxiliary states; they do not feed back into the other stream's own chain.
+  For the usual case, where the exhaust ends at the device, that is complete.
+  A multi-airstream editor is not yet built — recovery stages take the other
+  stream's condition as fields instead.
+- Desiccant ships as the isenthalpic idealisation agreed in decision 2, with a
+  warning on **every** result and no path to presenting it as a selection.
+- `solveCoil` returns null-with-a-reason rather than throwing, matching
+  `comfortZone`. Phase 5's weather binning should follow the same pattern for
+  an EPW file that fails to parse.

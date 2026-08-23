@@ -33,7 +33,15 @@ export interface ParamField {
    * Defaults to the field's `unit`. Dimensionless fields (SHR, effectiveness,
    * relative humidity) declare `'none'` and are carried across unchanged.
    */
-  readonly convert?: 'temperature' | 'temperatureDelta' | 'duty' | 'power' | 'airflow' | 'moistureRate' | 'none';
+  readonly convert?:
+    | 'temperature'
+    | 'temperatureDelta'
+    | 'duty'
+    | 'power'
+    | 'airflow'
+    | 'moistureRate'
+    | 'humidityRatio'
+    | 'none';
   readonly step?: number;
   readonly placeholder?: string;
   /**
@@ -179,6 +187,126 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
         kind: 'boolean',
         help: 'Draw-through or blow-through changes where the gain lands.',
       },
+    ],
+  },
+
+  'recovery-wheel-sensible': {
+    summary:
+      'A rotating matrix carries heat between the supply and exhaust streams. ' +
+      'Sensible only — no moisture crosses.',
+    fields: [
+      { key: 'sensible', label: 'Sensible effectiveness', ...PERCENT },
+      { key: 'tdb3', label: 'Other stream dry bulb', ...TEMPERATURE },
+      { key: 'rh3', label: 'Other stream RH', ...PERCENT },
+      { key: 'airflow3', label: 'Other stream airflow', kind: 'number', unit: 'airflow', step: 50 },
+    ],
+  },
+
+  'recovery-wheel-enthalpy': {
+    summary:
+      'A desiccant-coated matrix carries heat and moisture. In summer it ' +
+      'pre-dries the outdoor air as well as pre-cooling it.',
+    fields: [
+      { key: 'sensible', label: 'Sensible effectiveness', ...PERCENT },
+      { key: 'latent', label: 'Latent effectiveness', ...PERCENT },
+      { key: 'tdb3', label: 'Other stream dry bulb', ...TEMPERATURE },
+      { key: 'rh3', label: 'Other stream RH', ...PERCENT },
+      { key: 'airflow3', label: 'Other stream airflow', kind: 'number', unit: 'airflow', step: 50 },
+    ],
+  },
+
+  'recovery-plate': {
+    summary:
+      'Fixed plates keep the two streams apart, so there is no cross-leakage ' +
+      'and no moisture transfer.',
+    fields: [
+      { key: 'sensible', label: 'Sensible effectiveness', ...PERCENT },
+      { key: 'tdb3', label: 'Other stream dry bulb', ...TEMPERATURE },
+      { key: 'rh3', label: 'Other stream RH', ...PERCENT },
+      { key: 'airflow3', label: 'Other stream airflow', kind: 'number', unit: 'airflow', step: 50 },
+    ],
+  },
+
+  'recovery-runaround': {
+    summary:
+      'A pumped water or glycol loop couples coils in two streams that never ' +
+      'meet — the choice where cross-contamination is unacceptable.',
+    fields: [
+      {
+        key: 'sensible',
+        label: 'Loop effectiveness',
+        ...PERCENT,
+        help: '45–65% is realistic for a two-coil loop. Count the pump energy against the benefit.',
+      },
+      { key: 'tdb3', label: 'Other stream dry bulb', ...TEMPERATURE },
+      { key: 'rh3', label: 'Other stream RH', ...PERCENT },
+      { key: 'airflow3', label: 'Other stream airflow', kind: 'number', unit: 'airflow', step: 50 },
+    ],
+  },
+
+  'recovery-wraparound-precool': {
+    summary:
+      'The upstream leg of a passive circuit. It pre-cools air before the coil, ' +
+      'so the coil can dry the air further for the same leaving temperature.',
+    alternatives: 'Either a temperature drop or a duty.',
+    fields: [
+      { key: 'deltaT', label: 'Temperature drop', kind: 'number', unit: 'temperature', step: 1, convert: 'temperatureDelta' },
+      { key: 'power', label: 'Duty', ...DUTY, derive: (r) => Math.abs(r.duty.total) },
+    ],
+  },
+
+  'recovery-wraparound-reheat': {
+    summary:
+      'The downstream leg. It returns exactly the heat the pre-cool leg removed ' +
+      '— free reheat, with no new energy — so it has nothing to configure.',
+    alternatives: 'Pair this leg with its pre-cool leg using a coupling.',
+    fields: [],
+  },
+
+  'evaporative-direct': {
+    summary:
+      'Water evaporates into the airstream, cooling it along the constant ' +
+      'wet-bulb line. The leaving dry bulb can never fall below the entering wet bulb.',
+    fields: [
+      {
+        key: 'effectiveness',
+        label: 'Saturation effectiveness',
+        ...PERCENT,
+        help: 'Fraction of the wet-bulb depression achieved. 80–90% for a rigid-media pad.',
+      },
+    ],
+  },
+
+  'evaporative-indirect': {
+    summary:
+      'A scavenger stream is evaporatively cooled and then cools the supply air ' +
+      'through a heat exchanger — so the supply air cools at constant humidity ratio.',
+    fields: [
+      { key: 'effectiveness', label: 'Exchanger effectiveness', ...PERCENT },
+      { key: 'secondaryEffectiveness', label: 'Scavenger effectiveness', ...PERCENT },
+      { key: 'tdbSecondary', label: 'Scavenger dry bulb', ...TEMPERATURE },
+      { key: 'rhSecondary', label: 'Scavenger RH', ...PERCENT },
+    ],
+  },
+
+  desiccant: {
+    summary:
+      'A sorbent removes water vapour and releases the heat of sorption into the ' +
+      'air, so it leaves drier and hotter. Modelled as an idealised constant-enthalpy path.',
+    alternatives: 'Either a leaving humidity ratio or the fraction of moisture removed.',
+    fields: [
+      {
+        key: 'wOut',
+        label: 'Leaving humidity ratio',
+        kind: 'number',
+        unit: 'humidityRatio',
+        step: 1,
+        // Held in display units, which differ by a factor of seven between
+        // systems even though the underlying ratio is dimensionless.
+        convert: 'humidityRatio',
+        help: 'The target moisture content of the leaving air.',
+      },
+      { key: 'removal', label: 'Moisture removed', ...PERCENT },
     ],
   },
 

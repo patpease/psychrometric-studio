@@ -655,9 +655,11 @@ describe('failure handling', () => {
   });
 
   it('reports an unknown stage type without failing the chain', () => {
+    // A type this build does not know — as a project file written by a future
+    // version would contain. Everything before it still solves.
     const solved = solveOne([
       OUTDOOR_AIR,
-      { id: 'later', type: 'desiccant', params: {} },
+      { id: 'later', type: 'heat-pump-desuperheater' as never, params: {} },
     ]);
     expect(solved.airstreams[0]!.stages[0]!.result).toBeDefined();
     expect(solved.airstreams[0]!.stages[1]!.error).toMatch(/no model/i);
@@ -750,9 +752,21 @@ describe('registry', () => {
     }
   });
 
-  it('does not claim to model later-phase processes', () => {
-    for (const type of ['desiccant', 'recovery-wheel-enthalpy', 'evaporative-indirect'] as const) {
-      expect(MODELS[type], type).toBeUndefined();
+  it('models every stage type the schema declares', () => {
+    // Phase 4 completed the set, so an unmodelled declared type would now be a
+    // gap rather than a deferral.
+    for (const type of [
+      'desiccant',
+      'recovery-wheel-enthalpy',
+      'recovery-wheel-sensible',
+      'recovery-plate',
+      'recovery-runaround',
+      'recovery-wraparound-precool',
+      'recovery-wraparound-reheat',
+      'evaporative-direct',
+      'evaporative-indirect',
+    ] as const) {
+      expect(MODELS[type], type).toBeDefined();
     }
   });
 });

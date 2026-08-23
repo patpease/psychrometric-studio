@@ -16,6 +16,7 @@ import type { Stage } from '../types/project.js';
 import {
   convertAirflow,
   convertDuty,
+  convertHumidityRatioDisplay,
   convertMoistureRate,
   convertPower,
   convertTemperature,
@@ -40,6 +41,8 @@ function conversionFor(field: ParamField): NonNullable<ParamField['convert']> {
       return 'airflow';
     case 'moistureRate':
       return 'moistureRate';
+    case 'humidityRatio':
+      return 'humidityRatio';
     default:
       return 'none';
   }
@@ -64,6 +67,8 @@ function convertValue(
       return convertAirflow(value, from, to);
     case 'moistureRate':
       return convertMoistureRate(value, from, to);
+    case 'humidityRatio':
+      return convertHumidityRatioDisplay(value, from, to);
     case 'none':
       return value;
   }
