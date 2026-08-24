@@ -28,6 +28,11 @@ import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
 import { ChainEditor } from './ChainEditor.js';
 import { Collapsible } from './Collapsible.js';
+import { EducationPanel } from './EducationPanel.js';
+import { WalkthroughPanel } from './WalkthroughPanel.js';
+import { EducationContext } from './Tooltip.js';
+import { Icon } from '../icons/Icon.js';
+import { runCheck, WALKTHROUGH } from '../education/index.js';
 import { WeatherPanel, initialWeatherState, type WeatherState } from './WeatherPanel.js';
 import { WeatherLayer } from '../chart/WeatherLayer.js';
 import { convertHoursTo } from '../weather/epw.js';
@@ -58,14 +63,20 @@ type PressureMode = 'sea-level' | 'altitude' | 'explicit';
  * The system shown on first load: a single-zone cooling application with
  * outdoor and return air mixed, a coil, fan heat, and a space load. It exists
  * so the tool opens showing what it does rather than an empty chart.
+ *
+ * The airflows are chosen so the chain **closes**: 500 CFM of outdoor air and
+ * 1,500 of return, through a 54 °F coil, land the zone back at 75.7 °F and
+ * 49.7% RH — the condition the return air was declared at. An opening example
+ * that does not close its own loop teaches the wrong thing on first contact,
+ * and it is also the system the walkthrough builds, step by step.
  */
 const STARTER_SYSTEM: Stage[] = [
-  { id: 'oa', type: 'source', name: 'Outdoor air', airflow: 800, params: { tdb: 95, rh: 0.4 } },
+  { id: 'oa', type: 'source', name: 'Outdoor air', airflow: 500, params: { tdb: 95, rh: 0.4 } },
   {
     id: 'mx',
     type: 'mixing',
     name: 'Mixing box',
-    params: { airflow2: 1600, tdb2: 75, rh2: 0.5 },
+    params: { airflow2: 1500, tdb2: 75, rh2: 0.5 },
   },
   { id: 'cc', type: 'cooling', name: 'Cooling coil', params: { tdbOut: 54, rhOut: 0.93 } },
   { id: 'sf', type: 'fan', name: 'Supply fan', params: { power: 1.5, motorInAirstream: true } },
@@ -105,6 +116,14 @@ export function App(): React.JSX.Element {
   const [selectedStage, setSelectedStage] = useState<number | null>(null);
   const [comfort, setComfort] = useState<ComfortSettingsState>(() => defaultComfortSettings('IP'));
   const [weather, setWeather] = useState<WeatherState>(initialWeatherState);
+  /**
+   * A topic the user navigated to by clicking a term, which overrides the
+   * selected component until they go back. Without it, opening "bypass factor"
+   * from the cooling-coil entry would immediately be overwritten by the
+   * selection that is still active.
+   */
+  const [topicOverride, setTopicOverride] = useState<string | null>(null);
+  const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
 
   /**
    * Whether the page is in its dark theme.
@@ -175,6 +194,34 @@ export function App(): React.JSX.Element {
   };
 
   /**
+   * Apply a walkthrough step to the application.
+   *
+   * Steps are authored in IP and carry the *complete* chain rather than a diff,
+   * so stepping backwards restores a step exactly and there is no accumulated
+   * state to get wrong. Converting through `convertStages` — the same function
+   * the unit toggle uses — means there is one answer to "what is 95 °F in SI",
+   * not two that can drift.
+   */
+  useEffect(() => {
+    if (walkthroughStep === null) return;
+    const step = WALKTHROUGH.steps[walkthroughStep];
+    if (!step) return;
+
+    const declared = [...step.stages];
+    setStages(units === 'IP' ? declared : convertStages(declared, 'IP', units));
+    setSelectedStage(step.focus ?? null);
+    setTopicOverride(null);
+    if (step.showProtractor !== undefined) setShowProtractor(step.showProtractor);
+    if (step.show) {
+      setVisibility((current) => {
+        const next = { ...current };
+        for (const family of step.show!) next[family] = true;
+        return next;
+      });
+    }
+  }, [walkthroughStep, units]);
+
+  /**
    * The whole chain re-solves on every edit. It is a handful of closed-form
    * evaluations per stage, so this is cheaper than tracking which stages went
    * stale — and it means a change can never leave a downstream state showing a
@@ -196,6 +243,37 @@ export function App(): React.JSX.Element {
   );
 
   const supply = solved.airstreams[0]!;
+
+  /**
+   * The live design check for every stage.
+   *
+   * Evaluated here because a rule needs the *entering* condition and mass flow,
+   * which are the previous stage's outputs. Recomputing the lot on every edit
+   * costs a handful of comparisons and removes any chance of a note surviving
+   * the change that made it wrong.
+   */
+  const advisories = useMemo(
+    () =>
+      supply.stages.map((solvedStage, index) => {
+        const previous = index > 0 ? supply.stages[index - 1]?.result : undefined;
+        return runCheck(
+          solvedStage.stage.type,
+          solvedStage.stage,
+          solvedStage.result,
+          previous?.state ?? null,
+          previous?.massFlow ?? null,
+          units,
+        );
+      }),
+    [supply, units],
+  );
+
+  const selectedSolved = selectedStage !== null ? supply.stages[selectedStage] : undefined;
+  const enteringSolved =
+    selectedStage !== null && selectedStage > 0 ? supply.stages[selectedStage - 1]?.result : undefined;
+
+  /** What the education panel is showing: a clicked term wins over the selection. */
+  const topicId = topicOverride ?? selectedSolved?.stage.type ?? null;
 
   /**
    * Comfort zones rebuild whenever any input changes. Each zone is about a
@@ -251,7 +329,14 @@ export function App(): React.JSX.Element {
   // formatters, independently of the clearing logic in the interaction hook.
   const hover = interaction.hover?.units === units ? interaction.hover : null;
 
+  /** Selecting a component means "tell me about this", so it wins. */
+  const selectStage = useCallback((index: number | null) => {
+    setSelectedStage(index);
+    setTopicOverride(null);
+  }, []);
+
   return (
+    <EducationContext.Provider value={{ openTopic: setTopicOverride }}>
     <div className="app">
       <header className="app-header">
         <div className="brand">
@@ -284,14 +369,48 @@ export function App(): React.JSX.Element {
 
       <main className="app-body">
         <aside className="panel panel-left">
+          {walkthroughStep !== null ? (
+            <WalkthroughPanel
+              step={walkthroughStep}
+              onStep={setWalkthroughStep}
+              onExit={() => setWalkthroughStep(null)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="wt-start"
+              onClick={() => setWalkthroughStep(0)}
+            >
+              <Icon name={WALKTHROUGH.icon} size={26} />
+              <span>
+                <strong>{WALKTHROUGH.title}</strong>
+                <em>Guided walkthrough · {WALKTHROUGH.steps.length} steps</em>
+              </span>
+            </button>
+          )}
+
           <ChainEditor
             airstreamId="supply"
             stages={stages}
             solved={supply.stages}
             units={units}
             selected={selectedStage}
-            onSelect={setSelectedStage}
+            onSelect={selectStage}
             onChange={setStages}
+            advisories={advisories}
+          />
+
+          {/* The education section sits below the system, and its header
+              follows the selection — see EducationPanel. */}
+          <EducationPanel
+            topicId={topicId}
+            result={selectedSolved?.result}
+            entering={enteringSolved?.state ?? null}
+            advisory={selectedStage !== null ? (advisories[selectedStage] ?? null) : null}
+            units={units}
+            onBack={
+              topicOverride && selectedStage !== null ? () => setTopicOverride(null) : undefined
+            }
           />
         </aside>
 
@@ -325,7 +444,7 @@ export function App(): React.JSX.Element {
             hover={hover}
             solved={supply}
             selectedStage={selectedStage}
-            onSelectStage={setSelectedStage}
+            onSelectStage={selectStage}
             onDragState={dragSource}
             comfortZones={zones}
           />
@@ -367,7 +486,7 @@ export function App(): React.JSX.Element {
               solved={supply}
               units={units}
               selected={selectedStage}
-              onSelect={setSelectedStage}
+              onSelect={selectStage}
             />
           </Collapsible>
 
@@ -507,5 +626,6 @@ export function App(): React.JSX.Element {
         </aside>
       </main>
     </div>
+    </EducationContext.Provider>
   );
 }

@@ -402,45 +402,83 @@ means computing the offset, not rewriting the boundary solver.
 
 ## 7. Education module
 
-Guided walkthroughs plus worked examples. Two layers:
+*Revised 2026-08-24. Guided mode is replaced by contextual teaching; the eight
+candidate walkthroughs are cut to one.*
 
-**Layer 1 — contextual.** Hovering any line family or property shows what it is
-and why it matters. Adding a process opens a panel describing what physically
-happens, which properties change and which hold constant, and typical design
-values. This is bh-psych's `education.py` content, made interactive.
+Three layers, in order of how often a user meets them.
 
-Preserve its content schema exactly — it is already the right shape:
+**Layer 1 — tooltips, everywhere a term appears.** Every parameter field, every
+chart line family, every comfort input carries a one-line definition on hover
+and on keyboard focus. The definitions live in one registry with the panel
+content, so the sentence a user meets in passing is the same sentence the panel
+opens with. Every term is also a control: clicking it opens the full entry.
+
+**Layer 2 — the component panel.** A section in the **left column, below the
+system chain**, whose header is the icon and name of the currently selected
+component and changes with the selection. It answers: what is this thing, what
+does it do to the air, and what would a reviewer ask about it. With nothing
+selected it becomes a reference to the chart itself — the axes, the
+constructions, comfort, and the weather overlay — because an empty panel beside
+a full chart is a wasted third of the screen.
+
+Content keeps bh-psych's `education.py` schema, which is already the right
+decomposition. Two fields are promoted from prose into behaviour:
 
 | Field | Role | Interactive upgrade |
 |---|---|---|
-| `title` | Process name | — |
-| `kind` | Thermodynamic classification ("Adiabatic mixing", "Isothermal humidification") | Groups processes in the picker |
-| `moves` | Per-property direction: up, down, constant, or "set by RSHR" | **Drives the animation and the "what changed?" readout.** Was static text in Dash; here it becomes behaviour. |
+| `title` | Process name | Panel header, beside the icon |
+| `kind` | Thermodynamic classification | Sub-header; groups processes in the picker |
+| `moves` | Per-property direction | **Shown beside what the solver actually did.** Two columns — one from the writing, one from the calculation — so a disagreement is visible rather than hidden. |
 | `text` | What physically happens | Panel body |
-| `check` | The sanity check a senior engineer would make | **Surface as a live check.** "Off-coil air typically leaves at 90–95% RH" can be evaluated against the solved state and flagged when violated — turning static advice into an actual review of the user's design. |
+| `check` | The check a senior engineer would make | **Evaluated live.** Where the advice can be tested against the solved state, it is, and the result appears on the stage card and in the panel. |
+| `typical` | Design values worth knowing | New. Bands a reviewer carries in their head. |
+| `seeAlso` | — | New. Cross-references resolving across both registries. |
 
 Promoting `check` from prose to an evaluated rule is the single highest-leverage
 change available in the port, and it is what separates this from a chart that
-merely draws what it is told.
+merely draws what it is told. Three constraints on every rule, enforced by test:
 
-**Layer 2 — guided walkthroughs.** Scripted, multi-step scenarios that drive
-application state as the user advances. Each step can set inputs, highlight
-chart regions, pose a question, and reveal an explanation. Candidate set:
+1. It never fires on the tool's own default system.
+2. Its thresholds are unit-aware — a 3 K limit is 5.4 °F.
+3. It returns nothing rather than guessing when the stage did not solve.
 
-1. Reading the chart — find every property of one state point.
-2. Sizing a cooling coil — from room load to supply condition to coil duty,
-   introducing SHR and the protractor.
-3. Apparatus dew point and bypass factor — why a real coil never reaches ADP.
-4. Why reheat costs energy — visible as the area between two process lines.
-5. Mixing outdoor and return air — where the mix point lands and why.
-6. What an enthalpy wheel actually saves — sensible against latent recovery.
-7. Evaporative cooling and the wet-bulb limit — why climate decides.
-8. Reading the comfort zone — what clo and met really do to it.
+A rule is worded as a question, never a verdict. Advice that cannot be checked —
+"use coincident design conditions" — stays prose rather than being bent into a
+rule that fires on the wrong thing.
 
-Content lives in MDX so writing a walkthrough does not require touching
-application code. Budget realistically: **the content authoring is a larger
-effort than the walkthrough engine.** Ship the engine plus two walkthroughs,
-then add content steadily.
+**Layer 3 — one guided walkthrough.** *Sizing a cooling coil*, in eight steps:
+the brief, the outdoor condition, mixing, the room load line and the protractor,
+coil selection, fan heat, closing the loop at the space, and the apparatus dew
+point. Chosen because it is the spine of the tool — someone who finishes it has
+used most of what the application does, in the order a real selection is made.
+
+Each step carries the **complete** chain rather than a diff, so stepping
+backwards restores a step exactly. Steps are authored in IP and converted
+through the same function the unit toggle uses. Three steps pose a question;
+every option carries a response, including the wrong ones, because "add more
+airflow" is wrong in a way worth understanding.
+
+Further walkthroughs are content, not engine work, and can be added one file at
+a time.
+
+### Equipment icons
+
+54 supplied SVGs on a 48×48 canvas in a four-colour palette. Compiled to a
+TypeScript module at build time rather than loaded through `import.meta.glob`,
+so Vite, Vitest and plain Node read them identically — this project has been
+bitten by a build-dependent module once already (ADR 0003). The generator
+replaces the near-black outline with `currentColor` so one icon serves both
+themes, and keeps the accent colours, which carry meaning.
+
+Six of the seventeen stage types have no artwork yet and render a dashed
+placeholder: `outdoor-air`, `room-zone`, `sensible-wheel`, `wraparound-precool`,
+`wraparound-reheat`, `indirect-evaporative`. Each is named in
+`icons/map.ts` with a brief. Dropping the SVG in and re-running
+`npm run build:icons` is the whole of the work.
+
+Nineteen supplied icons have no stage type behind them — chillers, boilers, VAV
+boxes, diffusers, terminal units. They are a ready-made illustration set for the
+glossary, and a reason to keep the registry keyed by name rather than by type.
 
 ---
 
@@ -517,7 +555,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | 3 | Comfort module — PMV/PPD, polygon, adaptive chart | ✅ **Complete** — zone boundaries match published ASHRAE 55; see §17 |
 | 4 | Coil detail, energy recovery, advanced processes | ✅ **Complete** — both guards proven; see §19 |
 | 5 | EPW import, scatter, density bins, hours-in-zone | ✅ **Complete** — real TMYx file parses clean; see §20 |
-| 6 | Education — walkthrough engine + first two walkthroughs | A new engineer completes one unaided |
+| 6 | Education — tooltips, component panel, live checks, one walkthrough | ✅ **Complete** — 395 tests passing; see §21 |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF API | Round-trip save/load fidelity |
 | 8 | Deploy, docs, calculation reference, polish | Public URL live |
 
@@ -1056,3 +1094,75 @@ station's elevation adopted as the chart pressure in one click. Written up in
 - Weather state is not in the project schema, so it does not survive save/load.
   An EPW is large; the file should be re-selected rather than embedded. Decide
   in Phase 7.
+
+---
+
+## 21. Phase 6 outcome
+
+*Completed 2026-08-24. 395 tests passing (up from 369), type check clean,
+production build green, verified in the browser.*
+
+Delivered:
+
+- `web/src/icons/` — 54 vendored SVGs, a build-time generator, a name-keyed
+  registry with six declared-pending entries, and an `Icon` component.
+- `web/src/education/` — 17 equipment entries, 28 concept entries, 14 live check
+  rules, observed-movement derivation, and the walkthrough.
+- `web/src/ui/Tooltip.tsx`, `EducationPanel.tsx`, `WalkthroughPanel.tsx`.
+- `web/tests/education.test.ts` — 26 tests.
+
+### The gate
+
+*"A new engineer completes one unaided."* The walkthrough runs end to end,
+driving the system, the selection, and the education panel in lockstep across
+all eight steps, in both unit systems. It was walked through in the browser
+rather than only in tests.
+
+### Findings
+
+**The tool's own opening example did not close its own loop.** The starter
+system — 800 CFM outdoor, 1,600 return, 54 °F coil, 42/11 MBH zone — landed the
+space at 72.1 °F, not the 75 °F its own return air was declared at. The
+walkthrough said "the room lands back where you started", which would have been
+plainly false on screen. 500 CFM outdoor and 1,500 return closes it at 75.7 °F
+and 49.7% RH; both the starter and the walkthrough now use it, and a test pins
+the outcome so the sentence cannot quietly become a lie again.
+
+**Lowering a coil's leaving temperature does not lower its bypass factor.** The
+walkthrough originally told the reader to watch it fall. Measured across 58 → 50
+°F it *rises* slightly, 0.094 to 0.101, because specifying leaving dry bulb and
+leaving RH pins the apparatus dew point rather than the coil's construction. The
+step now teaches what actually happens — ADP falls 51.3 → 46.6 °F, duty climbs
+75 → 95 MBH, SHR falls 0.73 → 0.67 — which is the better lesson and has the
+merit of being true.
+
+**A tooltip inside a scrolling panel is clipped, and looking at it does not
+show you.** The absolutely positioned popup lost 207 px of its 256 to the left
+panel's `overflow: auto`. It was caught by measuring `getBoundingClientRect`
+against the panel, not by inspection — the visible part read as a complete
+sentence. Tooltips are now `position: fixed`, placed in JavaScript, clamped to
+the window, and flipped above the term when they would fall off the bottom.
+
+**`<button>` inside `<label for=…>` is invalid**, and screen readers announce
+the button's text as part of the field's name — "Leaving dry bulb °F ? What is
+this?". The trigger is now a sibling of the label.
+
+**Every observed property needs a state to be observed on.** `slope` is a
+declarable move for a room's load line but is a property of the process, not of
+either end state. Typing the observation list as the subset a `MoistAirState`
+actually carries makes that structural rather than a runtime `undefined`.
+
+**Outdoor-air fraction must come from mass flow, not the declared airflows.**
+500 CFM at 95 °F and 500 CFM at 75 °F are not the same quantity of dry air; the
+mixing check reads 24.2% where the volumes say 25%. The error always runs in the
+direction that flatters the ventilation rate.
+
+### Carried into Phase 7
+
+- Six icons pending from the user; placeholders render meanwhile.
+- Fan power and boolean fields carry no tooltip — `power` is ambiguous between
+  shaft power and duty, and a checkbox has nowhere to put the affordance.
+- `dailyMeansBefore` is still not wired to the adaptive panel (carried from
+  Phase 5). The concept entry for `prevailing-mean` now describes it, which
+  makes the gap more visible than it was.
+- Walkthrough progress is not persisted, and is not in the project schema.

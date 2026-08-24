@@ -14,10 +14,12 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 5 complete** — an interactive psychrometric chart, seventeen equipment
+**Phase 6 complete** — an interactive psychrometric chart, seventeen equipment
 types solved as a chain with verified energy balance, ASHRAE 55 thermal comfort,
-and EPW weather import with density mapping and hours-in-zone statistics.
-Education is Phase 6. See [PLAN.md](PLAN.md) for the full roadmap.
+EPW weather import with density mapping and hours-in-zone statistics, and a
+teaching layer: tooltips on every term, a component reference that follows the
+selection, live design checks on the solved system, and one guided walkthrough.
+Export and IO is Phase 7. See [PLAN.md](PLAN.md) for the full roadmap.
 
 | Phase | Deliverable | Status |
 |---|---|---|
@@ -27,8 +29,8 @@ Education is Phase 6. See [PLAN.md](PLAN.md) for the full roadmap.
 | 3 | Comfort module — PMV/PPD, comfort polygon, adaptive | ✅ done |
 | 4 | Coil detail, energy recovery, advanced processes | ✅ done |
 | 5 | EPW import, scatter, density bins, hours-in-zone | ✅ done |
-| 6 | Education — walkthrough engine and content | next |
-| 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | |
+| 6 | Education — tooltips, component panel, live checks, one walkthrough | ✅ done |
+| 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | next |
 | 8 | Deploy, docs, polish | |
 
 ## Layout
@@ -40,6 +42,8 @@ web/       Vite + TypeScript front end — owns every interactive calculation
   src/processes/ process models, chain solver, duty accounting
   src/comfort/   ASHRAE 55 PMV/PPD, comfort polygon, adaptive model
   src/weather/   EPW parsing, density binning, hours-in-zone
+  src/education/ equipment and concept content, live design checks, walkthrough
+  src/icons/     equipment SVGs and the build-time generator
   src/config/    branding and legal text (single source of truth)
   src/types/     project file types, mirroring the JSON Schema
   vendor/        vendored PsychroLib + provenance
@@ -91,8 +95,10 @@ cd web && npm run dev
   two PsychroLib instances and why nothing may call `SetUnitSystem`.
 - **[docs/weather-data.md](docs/weather-data.md)** — where weather files come
   from, how to cite them, and why there is no direct-download button.
+- **[ADR 0003](docs/adr/0003-umd-interop.md)** — why a green test suite is not
+  evidence that the browser works, and what was done about it.
 
-Three rules that the tests enforce and that are easy to break by accident:
+Five rules that the tests enforce and that are easy to break by accident:
 
 1. **Never import `vendor/psychrolib.js` directly.** Go through
    `src/psych/psychrolib.ts` and `lib(units)`.
@@ -105,6 +111,26 @@ Three rules that the tests enforce and that are easy to break by accident:
 4. **Enthalpy is not comparable across unit systems.** The IP and SI datums
    differ (0 °F vs 0 °C). Only enthalpy *differences* convert. See
    [calculation-reference §5](docs/calculation-reference.md).
+5. **A design check must stay silent on a good design.** Rules in
+   `src/education/checks.ts` are tested against the system the tool opens with,
+   in *both* unit systems. A rule that fires there has taught the user to ignore
+   every rule. Thresholds are declared in kelvin and converted; never compare a
+   Fahrenheit delta against a Celsius limit.
+
+### Editing the content
+
+Equipment entries live in `src/education/equipment.ts`, chart concepts in
+`concepts.ts`, and the walkthrough in `walkthrough.ts` — all plain TypeScript,
+no application code involved. A concept's `summary` is its tooltip *and* the
+first line of its panel entry, so there is one definition of each term rather
+than two that can drift.
+
+### Adding an icon
+
+Drop the SVG into `src/icons/svg/` and run `npm run build:icons`. It must be a
+`0 0 48 48` canvas; the generator enforces that and replaces the `#0B2B28`
+outline with `currentColor` so it works in both themes. Six icons are still
+pending — `src/icons/map.ts` names them and says what each should show.
 
 ## Weather data
 

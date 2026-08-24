@@ -43,6 +43,13 @@
   --ok-bg: #E8F6EE;
   --selected-bg: #E9F2EF;
 
+  /* A design note is advice, not a fault. It gets its own colour so a reader
+     can tell at a glance whether the tool is reporting a problem with the
+     calculation or offering an opinion about the design. */
+  --note: #2F6FA8;
+  --note-ink: #1D4D77;
+  --note-bg: #EAF2F9;
+
   /* Comfort zones are translucent so the chart's gridlines read through them —
      the zone is a region of the chart, not a sticker on top of it. */
   --comfort-winter: rgba(47, 127, 209, 0.13);
@@ -84,6 +91,9 @@
     --warn-bg: #33270F;
     --danger: #F08078;
     --danger-bg: #34191A;
+    --note: #6CB0EE;
+    --note-ink: #A9D2F5;
+    --note-bg: #17232F;
     --ok-ink: #7EDCAB;
     --ok-bg: #12291F;
     --selected-bg: #1D2A31;
@@ -534,7 +544,9 @@ body {
 /* ------------------------------------------------------------ chain editor */
 
 .panel-left {
-  width: 17.5rem;
+  /* Wider than it was: the education section carries running prose and a
+     three-column table, and neither survives a 17.5rem column. */
+  width: 21.5rem;
   border-left: 0;
   border-right: 1px solid var(--border);
 }
@@ -629,6 +641,19 @@ body {
   background: var(--warn);
 }
 
+.stage-badge.note {
+  background: var(--note);
+}
+
+.stage-icon {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+
+.stage.selected .stage-icon {
+  color: var(--process-selected);
+}
+
 .stage-body {
   padding: 0.5rem 0.55rem 0.6rem;
   border-top: 1px solid var(--border);
@@ -706,6 +731,17 @@ body {
 .stage-warning {
   background: var(--warn-bg);
   color: var(--warn-ink);
+}
+
+.stage-advisory {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0.5rem;
+  border-left: 3px solid var(--note);
+  border-radius: 0 4px 4px 0;
+  background: var(--note-bg);
+  color: var(--note-ink);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .stage-actions {
@@ -1178,4 +1214,478 @@ body {
 .citation a,
 .comfort-note a {
   color: var(--accent);
+}
+
+/* -------------------------------------------------------------- education */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- terms and tooltips ---- */
+
+.term-wrap {
+  position: relative;
+  display: inline;
+}
+
+.term {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 0.15em;
+  cursor: help;
+}
+
+.term:hover,
+.term:focus-visible {
+  color: var(--accent);
+  text-decoration-style: solid;
+}
+
+.infotip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-left: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--ink-muted);
+  font-size: 0.6rem;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.infotip:hover,
+.infotip:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Fixed, and placed by Tooltip.tsx. Both panels scroll, so an absolutely
+   positioned popup is clipped by their overflow context — measured, not
+   assumed. Width is capped here and the cap is mirrored in the component, which
+   needs it to clamp the popup against the window edge. */
+.tooltip {
+  position: fixed;
+  z-index: 40;
+  display: block;
+  width: max-content;
+  max-width: 16rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  text-decoration: none;
+  white-space: normal;
+}
+
+.tooltip-more {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--accent);
+  font-size: 0.63rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---- the education section ---- */
+
+.education-panel {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.edu-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.edu-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.edu-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.edu-kind {
+  margin: 0.1rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.edu-back {
+  margin-bottom: 0.6rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.68rem;
+}
+
+.education-panel h4 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+}
+
+.edu-summary,
+.edu-text,
+.edu-check {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.edu-summary {
+  font-weight: 600;
+}
+
+.edu-check {
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--border);
+  color: var(--ink-muted);
+}
+
+.edu-advisory {
+  margin: 0 0 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-left: 3px solid var(--note);
+  border-radius: 0 4px 4px 0;
+  background: var(--note-bg);
+  color: var(--note-ink);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.edu-typical {
+  font-size: 0.72rem;
+}
+
+.edu-typical div {
+  display: contents;
+}
+
+/* ---- what moves ---- */
+
+.moves {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+}
+
+.moves th,
+.moves td {
+  padding: 0.22rem 0.3rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 400;
+  vertical-align: top;
+}
+
+.moves thead th {
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.moves tbody th {
+  width: 42%;
+}
+
+.move-glyph {
+  display: inline-block;
+  min-width: 1.2em;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.move-qualifier {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.63rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.move-actual {
+  font-variant-numeric: tabular-nums;
+}
+
+.move-constant {
+  color: var(--ink-muted);
+}
+
+/* A declared direction the solver did not produce. Marked, never hidden. */
+.moves-disagree td:last-child {
+  color: var(--warn-ink);
+  font-weight: 700;
+}
+
+/* ---- see also, and the concept index ---- */
+
+.see-also ul,
+.concept-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.see-also li {
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.see-also-kind {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.63rem;
+}
+
+.concept-group {
+  margin-bottom: 0.5rem;
+}
+
+.concept-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+}
+
+/* ---- walkthrough ---- */
+
+.wt-start {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin-bottom: 0.85rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--selected-bg);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wt-start:hover {
+  background: var(--ok-bg);
+}
+
+.wt-start .icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.wt-start strong {
+  display: block;
+  font-size: 0.78rem;
+}
+
+.wt-start em {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.65rem;
+  font-style: normal;
+}
+
+.walkthrough {
+  margin-bottom: 1rem;
+  padding: 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.wt-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wt-head .icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.wt-head h2 {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.wt-head > div {
+  flex: 1;
+}
+
+.wt-progress {
+  margin: 0.1rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.65rem;
+}
+
+.wt-exit {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.wt-bar {
+  height: 3px;
+  margin: 0.5rem 0 0.7rem;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.wt-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 160ms ease-out;
+}
+
+.wt-body {
+  margin: 0 0 0.55rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.wt-question {
+  margin: 0.7rem 0;
+  padding: 0.55rem;
+  border-radius: 5px;
+  background: var(--bg);
+}
+
+.wt-prompt {
+  margin: 0 0 0.45rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.wt-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wt-options li {
+  margin-bottom: 0.35rem;
+}
+
+.wt-option {
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wt-option:hover {
+  border-color: var(--accent);
+}
+
+.wt-option.correct {
+  border-color: var(--ok-ink);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+  font-weight: 600;
+}
+
+/* A wrong answer is marked, but not scolded: same weight, muted colour, and
+   the response beneath it does the actual teaching. */
+.wt-option.incorrect {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.wt-response {
+  margin: 0.3rem 0 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.wt-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  margin: 0.5rem 0;
+  font-size: 0.7rem;
+}
+
+.wt-nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.wt-nav button {
+  flex: 1;
+}
+
+.wt-nav .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--plot-bg);
+  font-weight: 600;
+}
+
+/* Artwork not yet supplied — see icons/map.ts. */
+.icon-pending {
+  opacity: 0.7;
+}
+
+/* The label and its tooltip trigger share a row; the trigger is a sibling of
+   the label, not a child of it. See ChainEditor. */
+.param-label {
+  display: flex;
+  align-items: center;
+}
+
+.param-label label {
+  flex: 1;
 }

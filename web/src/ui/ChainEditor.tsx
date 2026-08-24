@@ -21,6 +21,39 @@ import {
 } from './stageFields.js';
 import type { StageResult } from '../processes/types.js';
 import { LABELS } from '../psych/units.js';
+import { Icon } from '../icons/Icon.js';
+import { iconForStage } from '../icons/map.js';
+import { InfoTip } from './Tooltip.js';
+
+/**
+ * Which concept a parameter field explains.
+ *
+ * Resolved from the field's **key and kind**, not from its label. Label text is
+ * written for humans and gets reworded; a match on "Sensible effectiveness"
+ * would break the first time someone shortens it to "Sensible". Key and kind
+ * are structural, so this mapping only changes when the field itself does.
+ *
+ * Note `sensible` and `latent`, which mean two different things depending on
+ * the stage: fractions on a recovery device, loads on a room. The kind
+ * distinguishes them, which is why it is part of the test.
+ */
+function topicForField(field: ParamField): string | undefined {
+  const { key, kind, unit } = field;
+
+  if (key.startsWith('twb')) return 'wet-bulb';
+  if (key.startsWith('tdp')) return 'dew-point';
+  if (key.startsWith('tdb')) return 'dry-bulb';
+  if (key.startsWith('rh') && kind === 'percent') return 'relative-humidity';
+  if (key.startsWith('airflow')) return 'specific-volume';
+  if (key === 'shr') return 'shr';
+  if (key === 'moistureRate') return 'humidity-ratio';
+  if (key === 'deltaT') return 'sensible-heat';
+  if (key === 'effectiveness' || key === 'secondaryEffectiveness') return 'effectiveness';
+  if (key === 'sensible') return kind === 'percent' ? 'effectiveness' : 'sensible-heat';
+  if (key === 'latent') return kind === 'percent' ? 'effectiveness' : 'latent-heat';
+
+  return unit === 'enthalpy' ? 'enthalpy' : undefined;
+}
 
 export interface ChainEditorProps {
   /** Id of the airstream being edited, for within-stream couplings. */
@@ -31,6 +64,14 @@ export interface ChainEditorProps {
   selected: number | null;
   onSelect: (index: number | null) => void;
   onChange: (stages: Stage[]) => void;
+  /**
+   * The live design check for each stage, by index, or `null` where it passes.
+   *
+   * Computed by the App rather than here, because the rule needs the *entering*
+   * state and mass flow — which belong to the stage before this one, and are
+   * the chain's business, not the editor's.
+   */
+  advisories?: readonly (string | null)[];
 }
 
 function newStage(type: StageType, index: number): Stage {
@@ -129,12 +170,21 @@ function Field({
     );
   }
 
+  const topic = topicForField(field);
+
   return (
     <div className={`param${hasDerived ? ' param-derived' : ''}`}>
-      <label htmlFor={id}>
-        {field.label}
-        {unit && <span className="param-unit">{unit}</span>}
-      </label>
+      {/* The tooltip trigger sits *outside* the label. A `<button>` inside a
+          `<label for=…>` is invalid — the spec allows only the labelled
+          control as an interactive descendant — and screen readers announce
+          the button's text as part of the field's name. */}
+      <span className="param-label">
+        <label htmlFor={id}>
+          {field.label}
+          {unit && <span className="param-unit">{unit}</span>}
+        </label>
+        {topic && <InfoTip topic={topic} />}
+      </span>
       <input
         id={id}
         type="number"
@@ -157,6 +207,7 @@ export function ChainEditor({
   selected,
   onSelect,
   onChange,
+  advisories = [],
 }: ChainEditorProps): React.JSX.Element {
   const update = (index: number, next: Stage): void => {
     const copy = [...stages];
@@ -221,6 +272,7 @@ export function ChainEditor({
           const result = solved[index];
           const isSelected = selected === index;
           const isFirst = index === 0;
+          const advisory = advisories[index] ?? null;
 
           return (
             <li
@@ -234,10 +286,19 @@ export function ChainEditor({
                 aria-expanded={isSelected}
               >
                 <span className="stage-number">{index + 1}</span>
+                <Icon name={iconForStage(stage.type)} size={22} className="stage-icon" />
                 <span className="stage-name">{stage.name ?? displayNameFor(stage.type)}</span>
                 {result?.error && <span className="stage-badge error">!</span>}
                 {!result?.error && (result?.result?.warnings.length ?? 0) > 0 && (
                   <span className="stage-badge warn">!</span>
+                )}
+                {/* A design note is advice, not a fault, and is marked as such.
+                    Sharing the warning badge would train the user to read a
+                    review comment as an error and dismiss both. */}
+                {!result?.error && advisory && (
+                  <span className="stage-badge note" title="Design note">
+                    i
+                  </span>
                 )}
               </button>
 
@@ -290,6 +351,12 @@ export function ChainEditor({
                       {warning}
                     </p>
                   ))}
+
+                  {advisory && (
+                    <p className="stage-advisory">
+                      <strong>Worth a look:</strong> {advisory}
+                    </p>
+                  )}
 
                   <div className="stage-actions">
                     <button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
