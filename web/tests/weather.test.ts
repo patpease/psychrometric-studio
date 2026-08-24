@@ -11,6 +11,8 @@ import {
   convertHoursTo,
   describeLocation,
   dailyMeansBefore,
+  dailyMeanSeries,
+  warmestDay,
   type WeatherHour,
 } from '../src/weather/epw.js';
 import {
@@ -22,6 +24,7 @@ import {
   ALL_HOURS,
 } from '../src/weather/bins.js';
 import { comfortZone } from '../src/comfort/polygon.js';
+import { runningMeanOutdoor } from '../src/comfort/adaptive.js';
 import { lib } from '../src/psych/psychrolib.js';
 import { DEFAULTS, celsiusToFahrenheit } from '../src/psych/units.js';
 
@@ -393,5 +396,113 @@ describe('daily means for the adaptive running mean', () => {
 
   it('returns nothing for a day the file does not contain', () => {
     expect(dailyMeansBefore(syntheticYear(), 13, 40, 5)).toEqual([]);
+  });
+});
+
+describe('daily mean series', () => {
+  /** A year whose warmest day is unambiguous and not at either end. */
+  function seasonalYear(): WeatherHour[] {
+    const hours: WeatherHour[] = [];
+    for (let month = 1; month <= 12; month += 1) {
+      for (let day = 1; day <= 28; day += 1) {
+        // A sine peaking in July, plus a diurnal swing so the daily mean is a
+        // genuine average rather than a single reading.
+        const seasonal = 15 - 15 * Math.cos(((month - 1) / 12) * 2 * Math.PI);
+        for (let hour = 0; hour < 24; hour += 1) {
+          hours.push({
+            month,
+            day,
+            hour,
+            tdb: seasonal + 6 * Math.sin(((hour - 9) / 24) * 2 * Math.PI),
+            w: 0.008,
+            rh: 0.5,
+            pressure: SI_PRESSURE,
+          });
+        }
+      }
+    }
+    return hours;
+  }
+
+  it('averages every hour recorded for a day', () => {
+    const hours: WeatherHour[] = [10, 20, 30, 40].map((tdb, index) => ({
+      month: 3,
+      day: 1,
+      hour: index,
+      tdb,
+      w: 0.005,
+      rh: 0.5,
+      pressure: SI_PRESSURE,
+    }));
+    const series = dailyMeanSeries(hours);
+    expect(series).toHaveLength(1);
+    expect(series[0]!.mean).toBe(25);
+    expect(series[0]!.hours).toBe(4);
+  });
+
+  it('keeps the file’s own order rather than sorting by date', () => {
+    // An EPW is a typical year assembled from several real ones; its rows are
+    // the authority on sequence. Re-sorting would quietly repair a malformed
+    // file into something that looks fine.
+    const hours: WeatherHour[] = [
+      { month: 7, day: 4, hour: 0, tdb: 25, w: 0.01, rh: 0.5, pressure: SI_PRESSURE },
+      { month: 1, day: 1, hour: 0, tdb: 0, w: 0.01, rh: 0.5, pressure: SI_PRESSURE },
+    ];
+    expect(dailyMeanSeries(hours).map((entry) => entry.month)).toEqual([7, 1]);
+  });
+
+  it('finds the warmest day by daily mean, not by peak hour', () => {
+    const warmest = warmestDay(seasonalYear());
+    expect(warmest).not.toBeNull();
+    expect(warmest!.month).toBe(7);
+  });
+
+  it('has no warmest day in an empty file', () => {
+    expect(warmestDay([])).toBeNull();
+  });
+});
+
+describe('prevailing mean outdoor temperature', () => {
+  /** Thirty days rising by one degree a day, ending the day before 2 February. */
+  function ramp(): WeatherHour[] {
+    const hours: WeatherHour[] = [];
+    for (let day = 1; day <= 31; day += 1) {
+      hours.push({ month: 1, day, hour: 0, tdb: day, w: 0.005, rh: 0.5, pressure: SI_PRESSURE });
+    }
+    hours.push({ month: 2, day: 1, hour: 0, tdb: 99, w: 0.005, rh: 0.5, pressure: SI_PRESSURE });
+    return hours;
+  }
+
+  it('weights recent days more heavily than distant ones', () => {
+    const means = dailyMeansBefore(ramp(), 2, 1, 30);
+    // Most recent first: 31 January is 31 degrees.
+    expect(means[0]).toBe(31);
+
+    const weighted = runningMeanOutdoor(means, 0.8);
+    const simple = runningMeanOutdoor(means, 1);
+
+    // On a warming ramp, weighting toward recent days must read warmer.
+    expect(weighted).toBeGreaterThan(simple);
+    // And the simple form is exactly the arithmetic mean of 2..31.
+    expect(simple).toBeCloseTo(16.5, 6);
+  });
+
+  it('collapses to the arithmetic mean at alpha = 1', () => {
+    // ASHRAE 55 permits either form, and the UI offers both through one code
+    // path. If these ever diverge the "simple 30-day mean" option is a lie.
+    const means = [10, 20, 30, 40];
+    const arithmetic = means.reduce((sum, value) => sum + value, 0) / means.length;
+    expect(runningMeanOutdoor(means, 1)).toBeCloseTo(arithmetic, 12);
+  });
+
+  it('excludes the day being assessed', () => {
+    // 1 February is 99 degrees and must not appear: the model wants the days
+    // *preceding* the one under assessment.
+    const means = dailyMeansBefore(ramp(), 2, 1, 30);
+    expect(means).not.toContain(99);
+  });
+
+  it('is NaN rather than zero when there are no days to average', () => {
+    expect(Number.isNaN(runningMeanOutdoor([]))).toBe(true);
   });
 });

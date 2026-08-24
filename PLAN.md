@@ -1379,7 +1379,17 @@ corrected; the plan entry is marked superseded rather than rewritten.
 
 - Only the supply airstream is editable. Multi-airstream files are valid and
   their other streams survive a round trip, but the editor does not show them.
-- `dailyMeansBefore` is written and tested but still not wired to the adaptive
-  comfort panel — carried since Phase 5, and the smallest remaining item.
+- ~~`dailyMeansBefore` unwired to the adaptive panel~~ — **done 2026-08-24.**
+  The adaptive section now derives the prevailing mean outdoor temperature from
+  a loaded EPW: pick a day, pick the averaging form, and the running mean of the
+  preceding 30 days is offered. It defaults to the **warmest day**, because a
+  naturally ventilated building is judged on whether it holds up when the
+  weather is at its worst.
+
+  The value is *offered*, never applied silently — a typed figure may come from
+  a standard or a client brief rather than a typical year, and taking it away
+  without saying so would be worse than not offering the derivation at all. The
+  day itself is session state, not project state: an EPW is not stored either,
+  so a saved date would reopen pointing at a file that is no longer loaded.
 - The oblique chart projection remains deliberately deferred.
 - One walkthrough. Further ones are content, not engine work.

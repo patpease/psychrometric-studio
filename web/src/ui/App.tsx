@@ -47,7 +47,7 @@ import { readFragment } from '../io/url.js';
 import type { ProjectMeta } from '../types/project.js';
 import { WeatherPanel, initialWeatherState, type WeatherState } from './WeatherPanel.js';
 import { WeatherLayer } from '../chart/WeatherLayer.js';
-import { convertHoursTo } from '../weather/epw.js';
+import { convertHoursTo, describeLocation } from '../weather/epw.js';
 import { convertAltitude, convertComfort, convertStages } from './convertProject.js';
 import {
   ComfortPanel,
@@ -659,6 +659,14 @@ export function App(): React.JSX.Element {
             pressure={atmosphere.pressure}
               zones={zones}
               sample={hover ? { tdb: hover.tdb, rh: hover.rh } : null}
+              weather={
+                weather.file && weather.file.hours.length > 0
+                  ? {
+                      hours: weather.file.hours,
+                      station: describeLocation(weather.file.location) || 'the loaded file',
+                    }
+                  : null
+              }
             />
           </Collapsible>
 

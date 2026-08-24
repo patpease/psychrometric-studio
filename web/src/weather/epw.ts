@@ -273,6 +273,63 @@ export function describeLocation(location: EpwLocation): string {
   return location.wmo ? `${place} (WMO ${location.wmo})` : place;
 }
 
+/** One day of the year, with the mean of the hours recorded for it. */
+export interface DailyMean {
+  readonly month: number;
+  readonly day: number;
+  /** Mean dry bulb for the day, in the file's current unit system. */
+  readonly mean: number;
+  /** Hours the mean was taken over. A short day is a gappy file, not an error. */
+  readonly hours: number;
+}
+
+/**
+ * Collapse hourly records into one mean per calendar day, in file order.
+ *
+ * File order rather than calendar order, deliberately: an EPW is a *typical*
+ * year assembled from several real ones, and its rows are the authority on
+ * sequence. Sorting by month and day would give the same answer for a
+ * well-formed file and would quietly reorder a malformed one into something
+ * that looks fine.
+ */
+export function dailyMeanSeries(hours: readonly WeatherHour[]): DailyMean[] {
+  const byDay = new Map<string, { month: number; day: number; sum: number; n: number; order: number }>();
+
+  for (const [index, hour] of hours.entries()) {
+    const key = `${hour.month}-${hour.day}`;
+    const existing = byDay.get(key);
+    if (existing) {
+      existing.sum += hour.tdb;
+      existing.n += 1;
+    } else {
+      byDay.set(key, { month: hour.month, day: hour.day, sum: hour.tdb, n: 1, order: index });
+    }
+  }
+
+  return [...byDay.values()]
+    .sort((a, b) => a.order - b.order)
+    .map((entry) => ({
+      month: entry.month,
+      day: entry.day,
+      mean: entry.sum / entry.n,
+      hours: entry.n,
+    }));
+}
+
+/**
+ * The warmest day of the year, by daily mean.
+ *
+ * The default day to assess against the adaptive model. A naturally ventilated
+ * building is judged on whether it stays acceptable when the weather is at its
+ * worst, so opening on the warmest day asks the question that matters rather
+ * than an arbitrary one.
+ */
+export function warmestDay(hours: readonly WeatherHour[]): DailyMean | null {
+  const series = dailyMeanSeries(hours);
+  if (series.length === 0) return null;
+  return series.reduce((warmest, day) => (day.mean > warmest.mean ? day : warmest));
+}
+
 /**
  * Daily mean dry-bulb temperatures, most recent first, for the adaptive comfort
  * model's running mean.
@@ -286,32 +343,16 @@ export function dailyMeansBefore(
   endDay: number,
   count = 30,
 ): number[] {
-  const byDay = new Map<string, { sum: number; n: number; order: number }>();
-
-  for (const [index, hour] of hours.entries()) {
-    const key = `${hour.month}-${hour.day}`;
-    const existing = byDay.get(key);
-    if (existing) {
-      existing.sum += hour.tdb;
-      existing.n += 1;
-    } else {
-      byDay.set(key, { sum: hour.tdb, n: 1, order: index });
-    }
-  }
-
-  const ordered = [...byDay.entries()]
-    .map(([key, value]) => ({ key, mean: value.sum / value.n, order: value.order }))
-    .sort((a, b) => a.order - b.order);
-
-  const endIndex = ordered.findIndex((entry) => entry.key === `${endMonth}-${endDay}`);
+  const series = dailyMeanSeries(hours);
+  const endIndex = series.findIndex((entry) => entry.month === endMonth && entry.day === endDay);
   if (endIndex < 0) return [];
 
   // Walk backwards from the day before, wrapping through the end of the year so
   // that early January looks back into the previous December.
   const means: number[] = [];
   for (let step = 1; step <= count; step += 1) {
-    const index = (endIndex - step + ordered.length * 2) % ordered.length;
-    means.push(ordered[index]!.mean);
+    const index = (endIndex - step + series.length * 2) % series.length;
+    means.push(series[index]!.mean);
   }
   return means;
 }

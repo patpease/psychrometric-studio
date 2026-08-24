@@ -5,14 +5,16 @@
  * PMV computed at 3 met looks exactly as authoritative as one computed at 1.2,
  * and only one of them is inside the standard.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   comfortZones,
   evaluateComfort,
   evaluateAdaptive,
+  runningMeanOutdoor,
   PMV_LIMITS,
   type ComfortZone,
 } from '../comfort/index.js';
+import { dailyMeansBefore, warmestDay, type WeatherHour } from '../weather/epw.js';
 import { comfortZoneLegend } from '../chart/ComfortOverlay.js';
 import { AdaptiveChart, adaptiveRange } from './AdaptiveChart.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
@@ -52,6 +54,13 @@ export interface ComfortPanelProps {
   zones: readonly ComfortZone[];
   /** The condition under the cursor, evaluated against the comfort model. */
   sample: { tdb: number; rh: number } | null;
+  /**
+   * The loaded weather file, if there is one.
+   *
+   * Only the adaptive model uses it, and only to derive the prevailing mean
+   * outdoor temperature from real daily means rather than a typed guess.
+   */
+  weather?: { hours: readonly WeatherHour[]; station: string } | null;
 }
 
 /** Air speed is stored in m/s; IP convention displays feet per minute. */
@@ -63,12 +72,166 @@ function airSpeedFromDisplay(value: number, units: UnitSystem): number {
   return units === 'IP' ? value / 196.85 : value;
 }
 
+/** Month names, for a picker that reads as a date rather than as two numbers. */
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Derive the prevailing mean outdoor temperature from the loaded weather file.
+ *
+ * The adaptive model's only climate input is a running mean of the daily mean
+ * outdoor temperatures preceding the day being assessed. Typing that number
+ * from memory is guesswork; an EPW carries all 8,760 hours it is made of.
+ *
+ * ## Why it is offered rather than applied
+ *
+ * The derived value is shown continuously and written to the setting only when
+ * the user asks. Silently overwriting a typed number the moment a weather file
+ * loads would take a deliberate input away without saying so — and the typed
+ * value is legitimate: a designer may be working to a figure from a standard or
+ * a client brief rather than to a typical year.
+ *
+ * ## Why the date is not saved
+ *
+ * The day being assessed lives in component state, not in the project file. Its
+ * input — the EPW — is not stored either (an EPW is ~1.5 MB and redistributable
+ * only under its source's terms), so a saved date would reopen pointing at a
+ * file that is no longer loaded. What *is* saved is the resulting temperature,
+ * which is the number the model actually uses.
+ */
+function PrevailingFromWeather({
+  hours,
+  station,
+  units,
+  current,
+  onApply,
+}: {
+  hours: readonly WeatherHour[];
+  station: string;
+  units: UnitSystem;
+  current: number;
+  onApply: (value: number) => void;
+}): React.JSX.Element | null {
+  /**
+   * ASHRAE 55 permits either form. The weighted mean is preferred because it
+   * lets recent weather dominate, which is what occupants adapt to; alpha = 1
+   * collapses the same code path to the simple arithmetic mean.
+   */
+  const [alpha, setAlpha] = useState(0.8);
+  const [date, setDate] = useState<{ month: number; day: number } | null>(null);
+
+  /**
+   * Open on the warmest day.
+   *
+   * A naturally ventilated building is judged on whether it stays acceptable
+   * when the weather is at its worst, so the warmest day asks the question that
+   * matters. Recomputed when the file changes, and when the unit system does —
+   * the hours are re-expressed on a unit switch, so a mean taken before it
+   * would be a Fahrenheit number labelled Celsius.
+   */
+  useEffect(() => {
+    const warmest = warmestDay(hours);
+    setDate(warmest ? { month: warmest.month, day: warmest.day } : null);
+  }, [hours]);
+
+  const derived = useMemo(() => {
+    if (!date) return null;
+    const means = dailyMeansBefore(hours, date.month, date.day, 30);
+    if (means.length === 0) return null;
+    const value = runningMeanOutdoor(means, alpha);
+    return Number.isFinite(value) ? value : null;
+  }, [hours, date, alpha]);
+
+  if (hours.length === 0 || !date) return null;
+
+  // Days available for the chosen month, taken from the file rather than from a
+  // calendar: a partial year should not offer a day it has no hours for.
+  const daysInMonth = [
+    ...new Set(hours.filter((hour) => hour.month === date.month).map((hour) => hour.day)),
+  ].sort((a, b) => a - b);
+
+  const inUse = derived !== null && Math.abs(derived - current) < 0.05;
+
+  return (
+    <div className="prevailing">
+      <h4>From the weather file</h4>
+      <p className="comfort-note">
+        The 30 days before the day you are assessing, from {station}.
+      </p>
+
+      <div className="prevailing-date">
+        <select
+          aria-label="Month"
+          value={date.month}
+          onChange={(event) => {
+            const month = Number.parseInt(event.target.value, 10);
+            const available = hours.filter((hour) => hour.month === month).map((hour) => hour.day);
+            // Keep the day if the new month has it, or fall back to its first.
+            const day = available.includes(date.day) ? date.day : Math.min(...available);
+            setDate({ month, day });
+          }}
+        >
+          {[...new Set(hours.map((hour) => hour.month))]
+            .sort((a, b) => a - b)
+            .map((month) => (
+              <option key={month} value={month}>
+                {MONTHS[month - 1]}
+              </option>
+            ))}
+        </select>
+        <select
+          aria-label="Day"
+          value={date.day}
+          onChange={(event) => setDate({ ...date, day: Number.parseInt(event.target.value, 10) })}
+        >
+          {daysInMonth.map((day) => (
+            <option key={day} value={day}>
+              {day}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Averaging"
+          value={alpha}
+          onChange={(event) => setAlpha(Number.parseFloat(event.target.value))}
+        >
+          <option value={0.8}>Weighted, α = 0.8</option>
+          <option value={0.9}>Weighted, α = 0.9</option>
+          <option value={0.6}>Weighted, α = 0.6</option>
+          <option value={1}>Simple 30-day mean</option>
+        </select>
+      </div>
+
+      {derived === null ? (
+        <p className="comfort-limit">
+          There are not enough days before this one in the file to take a running
+          mean.
+        </p>
+      ) : (
+        <div className="prevailing-result">
+          <strong>{formatTemperature(derived, units, true)}</strong>
+          {inUse ? (
+            <span className="prevailing-inuse">in use</span>
+          ) : (
+            <button type="button" onClick={() => onApply(Number(derived.toFixed(1)))}>
+              Use this
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ComfortPanel({
   settings,
   onChange,
   units,
   zones,
   sample,
+  weather = null,
 }: ComfortPanelProps): React.JSX.Element {
   const set = <K extends keyof ComfortSettingsState>(
     key: K,
@@ -256,6 +419,14 @@ export function ComfortPanel({
             where occupants control operable openings and can adapt their clothing. It is not
             valid in a mechanically cooled building.
           </p>
+
+          {weather && <PrevailingFromWeather
+            hours={weather.hours}
+            station={weather.station}
+            units={units}
+            current={settings.adaptivePrevailing}
+            onApply={(value) => set('adaptivePrevailing', value)}
+          />}
 
           <div className="field">
             <label htmlFor="adaptive-outdoor">
