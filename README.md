@@ -150,8 +150,10 @@ than two that can drift.
 
 Drop the SVG into `src/icons/svg/` and run `npm run build:icons`. It must be a
 `0 0 48 48` canvas; the generator enforces that and replaces the `#0B2B28`
-outline with `currentColor` so it works in both themes. Six icons are still
-pending — `src/icons/map.ts` names them and says what each should show.
+outline with `currentColor` so it works in both themes. Map it to a stage type
+in `src/icons/map.ts`. A mapped name with no artwork renders as a dashed
+placeholder and must be listed in `PENDING_ICONS`, which is how the tests tell
+a deliberate gap from a typo.
 
 ## Weather data
 

@@ -136,16 +136,30 @@ describe('icons', () => {
     expect(undeclared).toEqual([]);
   });
 
-  it('lists the six icons still to be supplied', () => {
-    const stillMissing = Object.keys(PENDING_ICONS).filter((name) => !iconExists(name));
-    expect(stillMissing).toEqual([
+  it('has real artwork for every stage type, with nothing left pending', () => {
+    const placeholders = Object.values(STAGE_ICONS).filter((name) => !iconExists(name));
+    expect(placeholders).toEqual([]);
+    expect(Object.keys(PENDING_ICONS).filter((name) => !iconExists(name))).toEqual([]);
+  });
+
+  it('draws the six late arrivals on the same canvas as the rest', () => {
+    // Supplied separately from the original set, so worth checking they match
+    // it: same 48x48 grid, same outline colour handed to CSS. The generator
+    // enforces the viewBox and would have refused a mismatched one, but it
+    // cannot tell a correct icon from an empty one.
+    for (const name of [
       'outdoor-air',
       'room-zone',
       'sensible-wheel',
       'wraparound-precool',
       'wraparound-reheat',
       'indirect-evaporative',
-    ]);
+    ]) {
+      const body = ICON_SOURCES[name];
+      expect(body, `${name} is not in the generated set`).toBeTruthy();
+      expect(body!.length, `${name} looks empty`).toBeGreaterThan(60);
+      expect(body, `${name} keeps a hard-coded outline colour`).toContain('currentColor');
+    }
   });
 
   it('recolours the artwork outline so one icon serves both themes', () => {

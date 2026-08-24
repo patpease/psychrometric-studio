@@ -470,11 +470,12 @@ bitten by a build-dependent module once already (ADR 0003). The generator
 replaces the near-black outline with `currentColor` so one icon serves both
 themes, and keeps the accent colours, which carry meaning.
 
-Six of the seventeen stage types have no artwork yet and render a dashed
-placeholder: `outdoor-air`, `room-zone`, `sensible-wheel`, `wraparound-precool`,
-`wraparound-reheat`, `indirect-evaporative`. Each is named in
-`icons/map.ts` with a brief. Dropping the SVG in and re-running
-`npm run build:icons` is the whole of the work.
+All seventeen stage types have artwork. The six drawn last — `outdoor-air`,
+`room-zone`, `sensible-wheel`, `wraparound-precool`, `wraparound-reheat`,
+`indirect-evaporative` — arrived after Phase 7 and dropped straight in. The
+placeholder mechanism stays, because the set will grow: a name with no artwork
+renders as an obvious dashed box, and listing it in `PENDING_ICONS` is what
+distinguishes "not drawn yet" from "typo in the mapping".
 
 Nineteen supplied icons have no stage type behind them — chillers, boilers, VAV
 boxes, diffusers, terminal units. They are a ready-made illustration set for the

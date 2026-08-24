@@ -5,14 +5,14 @@
  * because the artwork and the physics have different owners and change at
  * different times. Swapping an icon should never mean editing a solver.
  *
- * ## Icons still to be drawn
+ * ## Artwork that has not arrived yet
  *
- * Six of the seventeen stage types have no artwork in the supplied set. They
- * are named here anyway, with the file name they will have, and `PENDING_ICONS`
- * records why. A pending icon renders as a neutral placeholder — deliberately
- * plain, so a missing icon looks missing rather than looking like a decision.
- * Dropping the SVG into `src/icons/svg/` and re-running `npm run build:icons`
- * is the whole of the work; nothing else needs to change.
+ * Every stage type has an icon today. `PENDING_ICONS` stays because the set
+ * will grow — new stage types, and the nineteen supplied icons with no stage
+ * behind them yet — and a name with no artwork should render as an obvious
+ * placeholder rather than as a silent gap or a crash. Naming a pending icon
+ * here is what distinguishes "not drawn yet" from "typo in the mapping"; the
+ * test in `education.test.ts` fails on the second and tolerates the first.
  */
 import type { StageType } from '../types/project.js';
 import { ICON_SOURCES } from './generated.js';
@@ -45,25 +45,9 @@ export const STAGE_ICONS: Readonly<Record<StageType, string>> = Object.freeze({
  * know, kept next to the name it has to be saved under.
  */
 export const PENDING_ICONS: Readonly<Record<string, string>> = Object.freeze({
-  'outdoor-air':
-    'The entering air condition — outdoor, return, or any measured state. ' +
-    'Distinct from state-point, which marks a point on the chart rather than a ' +
-    'source of air.',
-  'room-zone':
-    'The conditioned space itself: the load the system exists to meet. A room ' +
-    'outline with supply and return, rather than a thermostat.',
-  'sensible-wheel':
-    'A rotary wheel transferring heat only, to sit beside enthalpy-wheel and ' +
-    'read as visibly different from it — no moisture crossing.',
-  'wraparound-precool':
-    'The upstream leg of a wrap-around heat-pipe circuit, cooling air before ' +
-    'the coil. Should pair visually with wraparound-reheat.',
-  'wraparound-reheat':
-    'The downstream leg of the same circuit, returning that heat after the ' +
-    'coil. The mirror of wraparound-precool.',
-  'indirect-evaporative':
-    'Evaporative cooling on a secondary airstream, transferred through a ' +
-    'surface — the primary air is cooled without being wetted.',
+  // Empty: all seventeen stage types have artwork. An entry here is a brief —
+  // the name the file must be saved under, and what it should show — for an
+  // icon that has been specified but not yet drawn.
 });
 
 /** Is there real artwork for this name, or only a placeholder? */
