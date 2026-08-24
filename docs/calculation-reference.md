@@ -233,3 +233,139 @@ Phase 0, exactly **one** inverse in the roadmap must be derived by hand:
 The original plan assumed the enthalpy inverse would need deriving. It does not,
 which removes one of the two places where an arithmetic slip could silently
 distort the chart.
+
+## 9. Process models
+
+Every stage is a pure function from an entering state and a set of parameters to
+a leaving state and a duty summary. Nothing is hidden between calls, and the
+whole chain re-solves on every edit — cheaper than tracking which stages went
+stale, and it makes it impossible for a downstream state to show a value from
+before an edit.
+
+### 9.1 The duty split
+
+A stage's total duty is `ṁ_da · Δh`. Splitting it into sensible and latent parts
+is done **at the entering humidity ratio**:
+
+```
+sensible = ṁ_da · [h(T_out, W_in) − h(T_in, W_in)]
+latent   = total − sensible
+```
+
+This is the ASHRAE convention and it matters: enthalpy is *bilinear* in
+(T, W) because `h = cp·T + W·(h_g + cpv·T)` carries a `T·W` cross term. Split at
+the leaving humidity ratio instead and the two halves differ by a few tenths of
+a percent — small, consistent, and the wrong number to hand a coil supplier.
+
+SHR is `sensible / total`, and is **NaN when total duty is zero**. An undefined
+ratio is reported as undefined rather than as 1.0, all the way out to the CSV
+and the report, where it prints blank. A ratio of unity for a stage doing no
+work is a lie the reader cannot detect.
+
+### 9.2 Apparatus dew point and bypass factor
+
+The ADP is the intersection of the extended process line with the saturation
+curve. It is found by bisection on the function
+
+```
+g(T) = W_line(T) − W_sat(T, p)
+```
+
+walking **down** from the leaving dry bulb to the *first* sign change. That
+detail is the whole of the correctness here: extended far enough, the process
+line runs to negative humidity ratio, where `g` flips sign a second time. A
+naive bracket across the full search range finds the same sign at both ends and
+reports "no apparatus dew point" for an entirely ordinary coil.
+
+Bypass factor is then the fraction of the entering-to-ADP interval not
+traversed:
+
+```
+BF = (T_out − T_adp) / (T_in − T_adp)
+```
+
+Computed along **temperature**. Along humidity ratio it agrees to within the
+convergence tolerance; along *enthalpy* it differs by about 0.3%, for the
+bilinearity reason in §9.1 — the process line is straight in (T, W) and
+therefore not straight in h. Two tests pin this: one asserting T and W agree,
+one asserting enthalpy does not.
+
+Where the line never reaches saturation there is no ADP, and the model says so
+rather than extrapolating. A stage claiming latent capacity in that state is
+flagged.
+
+### 9.3 Energy recovery
+
+Effectiveness is referenced to the **smaller of the two mass flows**, which is
+what physically limits the transfer: a large exhaust stream cannot heat a small
+supply stream beyond what the supply can absorb.
+
+```
+Q_max = ṁ_min · cp · (T_exhaust,in − T_supply,in)
+```
+
+The exhaust side is then derived from the energy and moisture actually
+transferred, **not** from an equal and opposite temperature change. Equal ΔT
+does not conserve energy when the two streams sit at different humidity ratios,
+because their specific heats differ. The error is small and it is systematic,
+which is worse than large and obvious.
+
+Sensible and latent effectiveness are separate inputs for an enthalpy wheel. A
+single quoted figure applied to both overstates latent recovery.
+
+### 9.4 Fan heat
+
+Fan power is entered as **shaft power** — HP in IP, kW in SI — because that is
+how a fan is specified. The heat added to the airstream is derived from it:
+
+- Motor in the airstream: all of it reaches the air.
+- Motor outside: only the shaft power does.
+
+Humidity ratio must not change across a fan, and a check enforces it.
+
+### 9.5 Desiccant — an explicit idealisation
+
+The desiccant wheel is modelled as **isenthalpic**: the state moves along a
+constant-enthalpy line, drier and hotter. This is an idealisation, chosen
+deliberately (PLAN §13 decision 2) and surfaced in the interface every time the
+stage is selected.
+
+Two things it does not model, both of which matter for design:
+
+1. A real wheel runs slightly above the constant-enthalpy line.
+2. It needs a regeneration airstream at 150–290 °F (65–140 °C), which is
+   usually the dominant energy cost and is absent here entirely.
+
+Size regeneration heat separately. Nothing in this tool will do it for you.
+
+### 9.6 Evaporative and adiabatic processes
+
+Direct evaporative cooling and adiabatic humidification are the same process
+under two names: the state slides down a constant wet-bulb line toward
+saturation, and effectiveness sets how far. The entering wet bulb is a **hard
+floor** on the leaving dry bulb — enforced by the model, and checked again by a
+design rule, because a violation there would mean the model itself is wrong.
+
+Indirect evaporative cooling puts two effectivenesses in series — the
+evaporative stage and the heat exchanger — so the achievable approach is worse
+than either alone. The primary air moves horizontally: sensible cooling, no
+moisture added.
+
+## 10. Design checks
+
+The checks surfaced beside a stage are engineering advice evaluated against the
+solved state, not validation. Three rules govern them, and the tests enforce all
+three:
+
+1. **No check fires on the tool's own default system**, in either unit system. A
+   tool that opens showing warnings has taught the user to ignore warnings by
+   the second minute.
+2. **Thresholds are declared in kelvin and converted.** A 3 K limit is 5.4 °F,
+   and a rule comparing a Fahrenheit delta against 3 is wrong in one system of
+   two.
+3. **A check returns nothing rather than guessing** when the stage did not solve
+   or the property it needs is absent.
+
+Every message is worded as a question rather than a verdict. Advice that cannot
+be evaluated — "use coincident design conditions" — stays prose rather than
+being bent into a rule that fires on the wrong thing.

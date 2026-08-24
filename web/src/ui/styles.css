@@ -1784,3 +1784,110 @@ body {
   font-size: 0.72rem;
   line-height: 1.45;
 }
+
+/* ------------------------------------------------------------------- about */
+
+.about-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+
+.about-list li {
+  margin-bottom: 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.about-licence {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--ink-muted);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.about-role {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.65rem;
+}
+
+.about-panel h4 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------------- crash */
+
+.crash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--bg);
+}
+
+.crash-body {
+  max-width: 34rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.crash-body h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.2rem;
+}
+
+.crash-body p {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.crash-message {
+  padding: 0.5rem 0.65rem;
+  border-left: 3px solid var(--danger);
+  border-radius: 0 4px 4px 0;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem !important;
+}
+
+.crash-body button {
+  margin-right: 0.4rem;
+}
+
+.crash-body .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--plot-bg);
+  font-weight: 600;
+}
+
+.crash-body details {
+  margin-top: 1rem;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+
+.crash-body pre {
+  overflow-x: auto;
+  max-height: 14rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 0.65rem;
+  line-height: 1.5;
+}

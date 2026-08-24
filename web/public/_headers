@@ -1,0 +1,36 @@
+# Cloudflare Pages response headers.
+#
+# The tool has no accounts, no storage, and makes no third-party requests, so
+# the policy below is a genuinely tight one rather than a copied boilerplate:
+# almost everything is 'self' or 'none', and each exception is there for a
+# reason recorded beside it.
+
+/*
+  # No plugins, no <base> hijacking, no framing, no form posts anywhere.
+  #   img-src data: and blob: — chart export embeds the weather layer as a data
+  #     URI, then loads the serialised SVG through a blob URL to rasterise it.
+  #   style-src 'unsafe-inline' — React writes inline style attributes, and the
+  #     chart sets stroke and fill per element. There is no way to hash those.
+  #   connect-src 'self' — this build ships without the report service. If one
+  #     is deployed later, its origin must be added here or the browser will
+  #     block the request. See docs/deploying.md.
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Nothing here uses a camera, a microphone, or a location. Saying so stops a
+  # future dependency from quietly asking.
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  X-Frame-Options: DENY
+
+# Content-hashed by Vite, so it can be cached forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Not hashed. Must revalidate, or a deploy leaves people on the old bundle.
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/third-party-notices.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=3600

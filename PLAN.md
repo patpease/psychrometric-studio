@@ -590,7 +590,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | 5 | EPW import, scatter, density bins, hours-in-zone | ✅ **Complete** — real TMYx file parses clean; see §20 |
 | 6 | Education — tooltips, component panel, live checks, one walkthrough | ✅ **Complete** — 395 tests passing; see §21 |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF API | ✅ **Complete** — 442 web + 10 API tests; see §22 |
-| 8 | Deploy, docs, calculation reference, polish | Public URL live |
+| 8 | Deploy, docs, calculation reference, polish | ✅ **Complete** — see §23 |
 
 Phases 1–3 are the core product. Phase 3's gate — *matching the CBE tool for
 identical inputs* — is the single most valuable test in the plan, and it is
@@ -618,18 +618,29 @@ worth reaching early.
 1. **Branding — resolved to Pease Studio (2026-08-22).** All branded surfaces
    (PDF report header/footer, app chrome, export stamps) read from a single
    branding config, `web/src/config/branding.ts`. The identity is **Pease
-   Studio**, strapline *Tools for building performance*; the stacked-bar mark is
-   `web/src/ui/BrandMark.tsx` and the app icon is `web/public/icon.svg`, both
-   reproduced as SVG from the supplied artwork.
+   Studio**.
 
-   One naming call was made: the project is "Psychrometric Studio", which under
-   this identity reads "Pease Studio Psychrometric Studio". The *displayed* app
-   name is therefore **Psychrometrics**; the project name in the docs is
-   unchanged. It is one string in the branding config if you want it different.
+   *Superseded 2026-08-24.* The rest of this entry described an interim state
+   and no longer matches the code. The supplied Psychrometric Studio identity
+   arrived mid-phase as raster artwork, which lives in `web/public/brand/`;
+   there is no `BrandMark.tsx` and no `public/icon.svg`. The displayed app name
+   is **Psychrometric Studio** under a *Pease Studio* endorsement line, and the
+   strapline is *Moist-air analysis for real buildings*. All of it is
+   `web/src/config/branding.ts`.
 
-   The open question about publishing an engineering calculator publicly under a
-   firm's name — professional indemnity, disclaimer language — still stands, and
-   is now more pointed rather than less. The disclaimer (decision 4) is in place.
+   *Resolved 2026-08-24.* The open question about publishing an engineering
+   calculator publicly under a firm's name is closed for v1: the source is
+   **MIT**, whose "without warranty of any kind" clause is the standard legal
+   position, and it sits alongside the in-app disclaimer (decision 4) requiring
+   a qualified engineer to review and independently verify every result. The
+   disclaimer appears in the About panel, in the export panel, on every chart
+   export, in the CSV header, and on every page of the PDF report.
+
+   MIT also matches all five bundled dependencies, so the whole distribution
+   carries one licence and a reader has nothing to reconcile. This is a
+   licensing position, not professional indemnity advice; if the tool is ever
+   cited in issued design work, that is a separate conversation with an insurer
+   rather than a change to this file.
 2. **Desiccant — isenthalpic idealisation.** Adsorption follows a constant-
    enthalpy line. Ships in Phase 4 **explicitly labelled as an idealisation** in
    the UI and on every export; the Banks/Jurinak F1/F2 characteristic-potential
@@ -1292,3 +1303,83 @@ for 3.12.
   refuses the report request.
 - Six equipment icons still pending from the user.
 - `dailyMeansBefore` remains unwired to the adaptive panel.
+
+---
+
+## 23. Phase 8 outcome
+
+*Completed 2026-08-24. 443 web tests and 10 API tests passing, production build
+verified under the deployed content security policy.*
+
+Delivered:
+
+- `LICENSE` — MIT, closing decision 1 from §13.
+- `THIRD-PARTY-NOTICES.md`, generated from the installed tree by
+  `web/scripts/collect-licences.mjs`, and served at `/third-party-notices.txt`.
+- `web/src/ui/AboutPanel.tsx` — basis, limitations, attributions, disclaimer.
+- `web/src/ui/ErrorBoundary.tsx` and `web/src/io/rescue.ts` — a crash screen
+  that hands the project back.
+- `web/public/_headers` — content security policy, caching, hardening.
+- `web/index.html` — description, social tags, manifest, a `noscript` message.
+- `docs/deploying.md`; calculation reference §§9–10 covering the process models
+  and the design checks.
+- CI now builds, and fails if a generated file is not committed.
+
+### The gate
+
+*"Public URL live."* The deployable artefact is built and verified: the
+production bundle was served with the exact policy from `_headers` applied, and
+every export — project file, CSV, SVG, PNG, share link — ran with **zero CSP
+violations**. Publishing it is a Cloudflare Pages project pointed at this
+repository; the settings are in `docs/deploying.md`.
+
+### Findings
+
+**The API base URL defaulted to `localhost:8000`, which is the visitor's
+machine.** Convenient in development and wrong the moment it deploys: the URL
+resolves in the browser, so every page load would have probed port 8000 on the
+user's own computer — a wasted request, a console error, and on an unlucky
+machine a project posted somewhere nobody intended. Unset now means *there is no
+service*, the health check is skipped entirely, and development gets the value
+from a checked-in `.env.development`.
+
+**The crash screen's rescue button silently did nothing.** The effect that
+publishes the current project cleaned up on unmount — the reflex — and React
+unmounts the tree the instant an error boundary catches. So the rescue was wiped
+at exactly the moment it was wanted. Found by crashing the application on
+purpose and pressing the button, which is the only way this class of bug is ever
+found. The holder now deliberately has no cleanup, and both files say why.
+
+**Four MIT libraries shipped with no attribution.** MIT requires its copyright
+and permission notice to travel with the distribution, and minification strips
+comments — so for a bundled front end the notices have to be shipped
+deliberately. They are now generated from the dependency tree rather than
+maintained by hand, because a hand-maintained list is wrong the first time
+someone adds a dependency, and CI fails if the generated file is stale.
+
+**The README pointed at two files that do not exist** — `BrandMark.tsx` and
+`public/icon.svg`, left over from an interim branding approach — and §13 of this
+plan described a strapline and an app name that had both since changed. Both
+corrected; the plan entry is marked superseded rather than rewritten.
+
+### What v1 deliberately does not include
+
+- **The PDF report service is not deployed.** The code is complete and tested;
+  the front end detects its absence and offers no PDF button. Standing it up is
+  three settings, listed in `docs/deploying.md`, and the one that is easy to
+  miss is widening `connect-src` in `_headers` — miss it and the button appears
+  and then fails, which is the worst of the three failure modes.
+- **No analytics, no fonts, no third-party requests at all.** This is what makes
+  the content security policy tight enough to be worth having, and what makes
+  "nothing is uploaded" true rather than aspirational.
+- **`og:url` and `canonical` are absent** until a custom domain is settled. A
+  hard-coded canonical that disagrees with the address bar is worse than none.
+
+### Still open
+
+- Only the supply airstream is editable. Multi-airstream files are valid and
+  their other streams survive a round trip, but the editor does not show them.
+- `dailyMeansBefore` is written and tested but still not wired to the adaptive
+  comfort panel — carried since Phase 5, and the smallest remaining item.
+- The oblique chart projection remains deliberately deferred.
+- One walkthrough. Further ones are content, not engine work.

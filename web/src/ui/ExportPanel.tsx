@@ -30,7 +30,7 @@ import { shareLink } from '../io/url.js';
 import { toCsv } from '../io/csv.js';
 import { chartToBase64Png, chartToPng, chartToSvg } from '../io/image.js';
 import { downloadBlob, downloadText } from '../io/download.js';
-import { buildReportPayload, reportServiceAvailable, requestReport } from '../io/report.js';
+import { API_BASE, buildReportPayload, reportServiceAvailable, requestReport } from '../io/report.js';
 import { DISCLAIMER } from '../config/branding.js';
 
 export interface ExportPanelProps {
@@ -304,8 +304,14 @@ export function ExportPanel({
       )}
       {pdfAvailable === false && (
         <p className="comfort-note">
-          PDF reports need the rendering service, which is not answering. Every
-          other export here runs entirely in your browser.
+          {/* Two different situations, and telling them apart is the whole
+              value of the message: one is a deployment that ships without the
+              service, the other is a service that is down. Only the second is
+              worth anyone investigating. */}
+          {API_BASE
+            ? 'PDF reports need the rendering service, which is not answering right now.'
+            : 'This build ships without the PDF report service.'}{' '}
+          Every other export here runs entirely in your browser.
         </p>
       )}
 

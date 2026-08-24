@@ -1,0 +1,129 @@
+# Deploying
+
+The web application is a static site. Every calculation happens in the
+browser, so there is no server to run, no database, and nothing to keep — which
+is also why there is nothing to back up and nothing to breach.
+
+The PDF report service is optional and **v1 ships without it**. The tool detects
+its absence and hides the one button that needs it.
+
+---
+
+## The front end — Cloudflare Pages
+
+### Project settings
+
+| Setting | Value |
+|---|---|
+| Framework preset | None |
+| Build command | `npm run build` |
+| Build output directory | `web/dist` |
+| Root directory | `web` |
+| Node version | 22 (set `NODE_VERSION=22` in the environment) |
+
+`npm run build` regenerates the icon module and the third-party notices, type
+checks, and then builds. The generated files are committed, so the build is
+reproducible either way — but regenerating means a changed SVG or a new
+dependency cannot ship as last week's output.
+
+### Environment variables
+
+Exactly one, and **it should be left unset** for a build without the report
+service:
+
+| Variable | When to set it | Effect |
+|---|---|---|
+| `VITE_API_URL` | Only once a report service is deployed | Origin of the service, e.g. `https://api.example.com`. No trailing slash. |
+
+Unset means *there is no service*. The application then skips the health check
+entirely and does not offer PDF export.
+
+> An earlier build defaulted this to `http://localhost:8000` so a fresh checkout
+> would work without configuration. That is actively wrong in production: the
+> URL resolves in the **visitor's** browser, so every page load would probe port
+> 8000 on their machine. Development sets it in `web/.env.development`, which is
+> checked in because it is not a secret.
+
+### Headers
+
+`web/public/_headers` is copied into the build output and applied by Pages. It
+sets a content security policy, caching, and the usual hardening. The policy is
+tight because the tool genuinely makes no third-party requests — three
+exceptions, each with a reason recorded beside it in the file:
+
+- `img-src data: blob:` — chart export embeds the weather layer as a data URI,
+  then loads the serialised SVG through a blob URL to rasterise it.
+- `style-src 'unsafe-inline'` — React writes inline style attributes and the
+  chart sets stroke and fill per element. There is no way to hash those.
+- `connect-src 'self'` — **must be widened if a report service is deployed**, or
+  the browser blocks the request no matter what `VITE_API_URL` says.
+
+The policy was verified against a production build with every export exercised:
+project file, CSV, SVG, PNG, and share link, with zero violations.
+
+### Custom domain
+
+When one is settled, two things change:
+
+1. Add `<meta property="og:url">` and a `<link rel="canonical">` to
+   `web/index.html`. Both are deliberately absent now — a hard-coded canonical
+   that disagrees with the address bar tells crawlers the page lives somewhere
+   it does not.
+2. Add the domain to `PSYCHRO_ALLOWED_ORIGINS` on the report service, if one is
+   running.
+
+---
+
+## The report service — when you want it
+
+Not deployed for v1. The code is complete, tested, and ready.
+
+```bash
+cd api
+python -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+.venv/bin/python -m uvicorn app.main:app --port 8000
+```
+
+It is a stateless FastAPI application that renders a PDF from JSON and keeps
+nothing. It **lays out; it does not calculate** — every number arrives already
+solved from the browser, which is what keeps the report and the on-screen chart
+in agreement.
+
+### Its environment variable
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PSYCHRO_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:5183` | Comma-separated origins allowed to call the service. |
+
+This must name the deployed front end exactly — scheme, host, and port if
+non-standard. A wildcard would make the service an open renderer for anyone's
+traffic, which is why there is no default that would allow one.
+
+### Deploying it
+
+Any container host will do; it needs one small always-on process. Three things
+to get right:
+
+1. `PSYCHRO_ALLOWED_ORIGINS` set to the front end's origin.
+2. `VITE_API_URL` set to the service's origin **at front-end build time** — it
+   is compiled into the bundle, so changing it needs a rebuild, not a restart.
+3. `connect-src` in `web/public/_headers` widened to include the service origin.
+
+Miss the third and the button appears and then fails, which is the worst of the
+three outcomes. Miss the first and the browser refuses the request. Miss the
+second and the button never appears at all — the safe failure, and the one the
+tool is designed around.
+
+---
+
+## Verifying a deployment
+
+- The chart draws, and the five starter stages each show an icon.
+- The **About this tool** panel opens and links to `/third-party-notices.txt`,
+  which returns plain text.
+- Save, CSV, SVG, PNG, and a share link all produce files.
+- Following a share link opens the project and clears the fragment.
+- The browser console is clean — in particular, no CSP violations.
+- If no report service is deployed, the export panel says so plainly and offers
+  no PDF button.

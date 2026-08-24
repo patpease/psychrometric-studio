@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:icons && tsc --noEmit && vite build",
+    "build": "npm run build:icons && npm run build:notices && tsc --noEmit && vite build",
     "typecheck": "npm run build:icons && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:vendor": "../scripts/vendor-psychrolib.sh",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "build:notices": "node scripts/collect-licences.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

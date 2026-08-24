@@ -14,13 +14,16 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 7 complete** — an interactive psychrometric chart, seventeen equipment
-types solved as a chain with verified energy balance, ASHRAE 55 thermal comfort,
-EPW weather import with density mapping and hours-in-zone statistics, a teaching
-layer (tooltips, a component reference that follows the selection, live design
-checks, one guided walkthrough), and export: project files, share links, CSV,
-PNG, SVG, and a branded PDF report. Deployment is Phase 8. See
-[PLAN.md](PLAN.md) for the full roadmap.
+**Version 1.0 — all eight phases complete.** An interactive psychrometric chart,
+seventeen equipment types solved as a chain with verified energy balance, ASHRAE
+55 thermal comfort, EPW weather import with density mapping and hours-in-zone
+statistics, a teaching layer (tooltips, a component reference that follows the
+selection, live design checks, one guided walkthrough), and export: project
+files, share links, CSV, PNG, SVG, and an optional branded PDF report.
+
+Everything runs in the browser. No account, no upload, nothing kept. See
+[docs/deploying.md](docs/deploying.md) to put it somewhere, and
+[PLAN.md](PLAN.md) for how it was built and what was learned doing it.
 
 | Phase | Deliverable | Status |
 |---|---|---|
@@ -32,7 +35,7 @@ PNG, SVG, and a branded PDF report. Deployment is Phase 8. See
 | 5 | EPW import, scatter, density bins, hours-in-zone | ✅ done |
 | 6 | Education — tooltips, component panel, live checks, one walkthrough | ✅ done |
 | 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | ✅ done |
-| 8 | Deploy, docs, polish | next |
+| 8 | Deploy, docs, polish | ✅ done |
 
 ## Layout
 
@@ -56,6 +59,14 @@ shared/schema/   project.schema.json — authoritative project file format
 docs/            calculation reference and architecture decisions
 scripts/         vendoring and verification
 ```
+
+## Deploying
+
+A static site on Cloudflare Pages: build `npm run build` in `web`, publish
+`web/dist`. Leave `VITE_API_URL` unset and the tool ships without the PDF
+report, which is the v1 configuration. Full instructions, the content security
+policy, and what changes when you add the report service are in
+[docs/deploying.md](docs/deploying.md).
 
 ## Getting started
 
@@ -165,11 +176,18 @@ Cite the TMYx data set as:
 
 ## Licensing
 
-PsychroLib is MIT — see `web/vendor/psychrolib.LICENSE.txt`. ASHRAE standards
-are copyrighted; this project implements published equations and does not
-reproduce tables or text.
+Psychrometric Studio is **MIT** — see [LICENSE](LICENSE).
 
-Branding is **Pease Studio**, confined to `web/src/config/branding.ts`, the mark
-in `web/src/ui/BrandMark.tsx`, and the app icon at `web/public/icon.svg`. The
-identity artwork was supplied as raster images and reproduced as SVG; drop the
-original files into `web/public/` to swap them back.
+Five libraries ship in the bundle, all MIT. Their copyright and permission
+notices are collected into [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
+served by the application at `/third-party-notices.txt`, because a minified
+bundle strips comments and the deployed page is the distribution most people
+will ever see. The file is **generated** — run `npm run build:notices` after
+changing a runtime dependency rather than editing it.
+
+ASHRAE standards are copyrighted. This project implements published equations
+and reproduces neither the tables nor the text of any standard.
+
+Branding is **Pease Studio**, confined to `web/src/config/branding.ts` and the
+image assets under `web/public/brand/`. Swapping or genericising the identity is
+a change to that one file and those files.

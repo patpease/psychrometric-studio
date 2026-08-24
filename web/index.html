@@ -3,14 +3,55 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Psychrometric Studio — moist-air analysis for real buildings</title>
+    <meta
+      name="description"
+      content="A psychrometric chart that solves an air-handling chain, checks it against ASHRAE 55 comfort, and counts a year of weather against it. Runs entirely in your browser: no account, no upload."
+    />
+    <meta name="author" content="Pease Studio" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0C2A24" />
+
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/psychrometric-studio-favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/brand/psychrometric-studio-favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/psychrometric-studio-icon-180.png" />
-    <meta name="theme-color" content="#0C2A24" />
-    <title>Psychrometric Studio</title>
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!--
+      Social preview. `og:url` is deliberately absent: this build is served from
+      whatever host Pages gives it, and a hard-coded canonical that disagrees
+      with the address bar is worse than none — it tells crawlers the page lives
+      somewhere it does not. Add it here once a custom domain is settled.
+
+      The image is the square app icon rather than a 1200x630 card. Square is
+      handled correctly by every major unfurler; a card cropped from artwork
+      never drawn for it is not.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Psychrometric Studio" />
+    <meta property="og:title" content="Psychrometric Studio" />
+    <meta
+      property="og:description"
+      content="Solve an air-handling chain on a psychrometric chart, check it against ASHRAE 55, and count a year of weather against it. Everything runs in your browser."
+    />
+    <meta property="og:image" content="/brand/psychrometric-studio-icon-1024.png" />
+    <meta name="twitter:card" content="summary" />
+
+    <!--
+      No analytics, no fonts, no tags. The tool has no accounts and keeps
+      nothing; loading a third-party script would quietly make that untrue.
+    -->
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <p style="padding: 2rem; font-family: system-ui, sans-serif; line-height: 1.6">
+        Psychrometric Studio needs JavaScript. Every calculation happens in your
+        browser rather than on a server — which is what lets the tool work
+        without an account, and without your design leaving your machine.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

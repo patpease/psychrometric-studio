@@ -25,15 +25,22 @@ import { provenanceStamp } from '../config/branding.js';
 import { formatPressure } from '../ui/format.js';
 
 /**
- * Where the report service lives.
+ * Where the report service lives, or nothing.
  *
- * Configured at build time. The default is the local development port, so a
- * checkout works without a `.env` and a deployment that forgets to set it fails
- * visibly — the health check does not answer and the button does not appear —
- * rather than silently posting projects to somewhere unexpected.
+ * Set at build time via `VITE_API_URL`. **Unset means there is no service**, and
+ * the application says so rather than guessing.
+ *
+ * An earlier version defaulted to `http://localhost:8000` so that a checkout
+ * worked without configuration. That is wrong once deployed: the URL is
+ * resolved in the *visitor's* browser, so every page load would probe port 8000
+ * on their own machine — a pointless request, a console error, and on the
+ * unlucky machine where something is listening there, a project posted
+ * somewhere nobody intended.
+ *
+ * Development sets it in `.env.development`, which is checked in precisely
+ * because it is not a secret and the value is the same for everyone.
  */
-export const API_BASE: string =
-  (import.meta.env['VITE_API_URL'] as string | undefined) ?? 'http://localhost:8000';
+export const API_BASE: string = (import.meta.env['VITE_API_URL'] ?? '').trim();
 
 export interface ReportPayload {
   meta: ProjectMeta;
@@ -142,6 +149,10 @@ export function buildReportPayload({
 
 /** Is the report service answering? Used to decide whether to offer PDF at all. */
 export async function reportServiceAvailable(signal?: AbortSignal): Promise<boolean> {
+  // No service configured is not a failure to report — it is a build that ships
+  // without PDF export, which is a supported configuration.
+  if (!API_BASE) return false;
+
   try {
     const response = await fetch(`${API_BASE}/health`, {
       // A health check that hangs is the same as one that failed, as far as

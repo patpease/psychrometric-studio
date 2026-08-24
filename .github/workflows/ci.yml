@@ -35,6 +35,20 @@ jobs:
       - name: Test (includes the ASHRAE reference-value gate)
         run: npm test
 
+      - name: Build
+        # The deployed artefact. Runs last because it is the slowest and the
+        # least informative when something is wrong — but it must run, because
+        # the type check does not exercise Vite's module resolution, and that is
+        # exactly where this project has been bitten before (ADR 0003).
+        run: npm run build
+
+      - name: Check the generated files are committed
+        # `build` regenerates the icon module and the third-party notices. If
+        # either differs from what is in the tree, someone changed an SVG or a
+        # dependency without regenerating — and the committed version is what a
+        # reader of the repository sees.
+        run: git diff --exit-code -- src/icons/generated.ts public/third-party-notices.txt ../THIRD-PARTY-NOTICES.md
+
   api:
     name: API
     runs-on: ubuntu-latest

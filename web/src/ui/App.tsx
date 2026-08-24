@@ -34,7 +34,15 @@ import { EducationContext } from './Tooltip.js';
 import { Icon } from '../icons/Icon.js';
 import { runCheck, WALKTHROUGH } from '../education/index.js';
 import { ExportPanel } from './ExportPanel.js';
-import { fromProject, readProject, type SessionState } from '../io/project.js';
+import { AboutPanel } from './AboutPanel.js';
+import { setRescue } from '../io/rescue.js';
+import {
+  fromProject,
+  readProject,
+  toProject,
+  writeProject,
+  type SessionState,
+} from '../io/project.js';
 import { readFragment } from '../io/url.js';
 import type { ProjectMeta } from '../types/project.js';
 import { WeatherPanel, initialWeatherState, type WeatherState } from './WeatherPanel.js';
@@ -460,6 +468,22 @@ export function App(): React.JSX.Element {
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }, [applyProject]);
 
+  /**
+   * Keep the crash screen supplied with a project it can hand back.
+   *
+   * Written from an effect rather than during render, so the stored session is
+   * always one that has successfully drawn — see `io/rescue.ts`.
+   *
+   * **Deliberately no cleanup.** Clearing the holder on unmount is the reflex,
+   * and it defeats the entire feature: React unmounts this tree the moment the
+   * error boundary catches, so the rescue would be wiped exactly when the crash
+   * screen needs it. Found by crashing the app on purpose and pressing the
+   * button, which returned nothing.
+   */
+  useEffect(() => {
+    setRescue(() => writeProject(toProject(session)));
+  }, [session]);
+
   /** Selecting a component means "tell me about this", so it wins. */
   const selectStage = useCallback((index: number | null) => {
     setSelectedStage(index);
@@ -771,6 +795,10 @@ export function App(): React.JSX.Element {
               Reset view
             </button>
             </section>
+          </Collapsible>
+
+          <Collapsible title="About this tool" defaultOpen={false}>
+            <AboutPanel />
           </Collapsible>
 
           <footer className="panel-footer">
