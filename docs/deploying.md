@@ -16,10 +16,16 @@ its absence and hides the one button that needs it.
 | Setting | Value |
 |---|---|
 | Framework preset | None |
-| Build command | `npm run build` |
-| Build output directory | `web/dist` |
 | Root directory | `web` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
 | Node version | 22 (set `NODE_VERSION=22` in the environment) |
+
+**The output directory is relative to the root directory**, not to the
+repository. With the root set to `web`, the build writes `web/dist` and
+Cloudflare is looking for `dist`. Getting this the other way round is the usual
+cause of a green build that publishes nothing — if the deploy log ends with
+"Output directory not found", this is why.
 
 `npm run build` regenerates the icon module and the third-party notices, type
 checks, and then builds. The generated files are committed, so the build is

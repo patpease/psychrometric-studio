@@ -62,8 +62,8 @@ scripts/         vendoring and verification
 
 ## Deploying
 
-A static site on Cloudflare Pages: build `npm run build` in `web`, publish
-`web/dist`. Leave `VITE_API_URL` unset and the tool ships without the PDF
+A static site on Cloudflare Pages: root directory `web`, build `npm run build`,
+output directory `dist`. Leave `VITE_API_URL` unset and the tool ships without the PDF
 report, which is the v1 configuration. Full instructions, the content security
 policy, and what changes when you add the report service are in
 [docs/deploying.md](docs/deploying.md).
