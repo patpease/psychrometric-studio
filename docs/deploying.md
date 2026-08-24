@@ -21,11 +21,26 @@ its absence and hides the one button that needs it.
 | Build output directory | `dist` |
 | Node version | 22 (set `NODE_VERSION=22` in the environment) |
 
+**The root directory is the setting that actually matters**, and on the project
+creation screen it is collapsed behind an *Advanced* disclosure that is easy to
+miss. There is no `package.json` at the repository root, so a build that skips
+it fails immediately:
+
+```
+npm error path /opt/buildhome/repo/package.json
+npm error enoent Could not read package.json
+```
+
+The give-away in the log is the line **"No dependencies detected to cache"**
+followed by the build command running with no install step in between —
+Cloudflare found no manifest to install from. Set the root directory to `web`
+and redeploy.
+
 **The output directory is relative to the root directory**, not to the
 repository. With the root set to `web`, the build writes `web/dist` and
-Cloudflare is looking for `dist`. Getting this the other way round is the usual
-cause of a green build that publishes nothing — if the deploy log ends with
-"Output directory not found", this is why.
+Cloudflare is looking for `dist`. Getting this the other way round is the other
+common failure — a green build that publishes nothing, with "Output directory
+not found" at the end of the log.
 
 `npm run build` regenerates the icon module and the third-party notices, type
 checks, and then builds. The generated files are committed, so the build is
