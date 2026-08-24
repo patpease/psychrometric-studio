@@ -22,7 +22,8 @@
       "items": { "$ref": "#/$defs/airstream" }
     },
     "chart": { "$ref": "#/$defs/chartSettings" },
-    "comfort": { "$ref": "#/$defs/comfortSettings" }
+    "comfort": { "$ref": "#/$defs/comfortSettings" },
+    "weather": { "$ref": "#/$defs/weatherSettings" }
   },
 
   "$defs": {
@@ -193,7 +194,19 @@
       "additionalProperties": false,
       "properties": {
         "tdbRange": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-        "maxHumidityRatio": { "type": "number", "exclusiveMinimum": 0 },
+        "humidityRatioRange": {
+          "description": "Both ends of the humidity axis, canonical lb/lb or kg/kg. The view can be panned as well as zoomed, so the bottom of the axis is not always zero and storing only the top would lose the pan.",
+          "type": "array",
+          "items": { "type": "number", "minimum": 0 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "maxHumidityRatio": {
+          "description": "Superseded by humidityRatioRange. Still accepted on read, where it is taken as the top of an axis starting at zero.",
+          "deprecated": true,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "projection": { "type": "string", "enum": ["rectangular", "oblique"], "default": "rectangular" },
         "families": {
           "description": "Which line families are drawn.",
@@ -218,11 +231,34 @@
       "properties": {
         "model": { "type": "string", "enum": ["pmv", "adaptive"], "default": "pmv" },
         "metabolicRate": { "type": "number", "minimum": 0.7, "maximum": 4.0, "default": 1.1 },
+        "clothingWinter": {
+          "description": "Clothing insulation for the winter zone, clo. Named rather than positional: an array of two numbers does not say which end is which, and a reader that guesses wrong swaps the two zones silently.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.5,
+          "default": 1.0
+        },
+        "clothingSummer": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.5,
+          "default": 0.5
+        },
         "clothing": {
-          "description": "Clothing insulation, clo. Two zones are drawn by default: winter (1.0) and summer (0.5).",
+          "description": "Superseded by clothingWinter and clothingSummer. Still accepted on read as [winter, summer].",
+          "deprecated": true,
           "type": "array",
           "items": { "type": "number", "minimum": 0, "maximum": 1.5 },
-          "default": [0.5, 1.0]
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "adaptiveIndoor": {
+          "description": "Indoor operative temperature assessed against the adaptive model, in the project's temperature units.",
+          "type": "number"
+        },
+        "adaptivePrevailing": {
+          "description": "Prevailing mean outdoor temperature for the adaptive model, in the project's temperature units.",
+          "type": "number"
         },
         "airSpeed": {
           "description": "Average air speed, m/s. Above 0.2 the still-air PMV method does not apply; the elevated-air-speed cooling effect is out of scope for v1.",
@@ -240,6 +276,38 @@
           "type": "number",
           "default": 0
         }
+      }
+    },
+
+    "weatherSettings": {
+      "description": "How the weather overlay was configured. The EPW file itself is deliberately NOT stored: it is roughly 1.5 MB of text that would dominate the project file, it is redistributable only under the source's own terms, and it is reproducible from the station identity below. On load the tool names the station and asks for the file again.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "station": {
+          "description": "Enough to recognise the file that was used, and to tell the user they have opened the wrong one.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "country": { "type": "string" },
+            "wmo": { "type": "string" },
+            "elevation": { "type": "number" }
+          }
+        },
+        "mode": { "type": "string", "enum": ["off", "scatter", "density"], "default": "off" },
+        "months": {
+          "description": "Months included, 1-12. Empty means all.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 12 }
+        },
+        "hours": {
+          "description": "Hours of the day included, 0-23. Empty means all.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0, "maximum": 23 }
+        },
+        "presetIndex": { "type": "integer", "minimum": 0 }
       }
     },
 

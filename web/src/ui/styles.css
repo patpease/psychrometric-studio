@@ -8,9 +8,22 @@
  * a sequential scale would make neighbouring families read as related.
  */
 
+/*
+ * The light palette, on the root and on anything that asks for it by name.
+ *
+ * The `[data-theme="light"]` half exists for **export**. A chart serialised out
+ * of a dark-mode session would arrive in a report as pale lines on a black
+ * field; the exporter mounts a hidden clone inside a `data-theme="light"`
+ * container and resolves computed styles there, which produces a light chart
+ * without the visible interface flickering. Custom properties cascade, so one
+ * extra selector is the whole mechanism.
+ */
 :root {
   color-scheme: light dark;
+}
 
+:root,
+[data-theme='light'] {
   --bg: #f6f7f9;
   --surface: #ffffff;
   --border: #d9dee5;
@@ -59,7 +72,11 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  /* The guard is what makes an export container win over the viewer's system
+     preference. Without it, a light-themed clone inside a dark-mode page would
+     inherit the dark tokens from :root and the whole exercise would be a
+     no-op. */
+  :root:not([data-theme='light']) {
     --bg: #10151b;
     --surface: #171e26;
     --border: #2a3543;
@@ -1688,4 +1705,82 @@ body {
 
 .param-label label {
   flex: 1;
+}
+
+/* ------------------------------------------------------------------ export */
+
+.export-panel h3 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+}
+
+.export-panel h3:first-child {
+  margin-top: 0;
+}
+
+.export-panel textarea {
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+  resize: vertical;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.export-actions button {
+  flex: 1 1 auto;
+}
+
+.export-actions .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--plot-bg);
+  font-weight: 600;
+}
+
+/* Monospace and selectable: this is a string to be copied, and a proportional
+   font makes it impossible to see where it has been truncated. */
+.share-link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.export-disclaimer {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Opening a project can produce notes that are not errors — an upgrade, a
+   weather file that needs reloading. They sit above the panels because they are
+   about the whole session, and they are dismissible because they are not
+   problems to be fixed. */
+.load-notice {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--note);
+  border-radius: 0 4px 4px 0;
+  background: var(--note-bg);
+  color: var(--note-ink);
+}
+
+.load-notice p {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
 }

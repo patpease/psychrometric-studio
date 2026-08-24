@@ -38,6 +38,85 @@ export interface WeatherLayerProps {
 const RAMP_LIGHT = ['#e8eef5', '#bcd2e8', '#8fb4d9', '#5f92c7', '#3b6fae', '#22497e'];
 const RAMP_DARK = ['#1c2733', '#243d55', '#2c567a', '#3670a1', '#4b8fc4', '#6fb0e0'];
 
+export interface WeatherDrawing {
+  readonly hours: readonly WeatherHour[];
+  readonly mode: WeatherMode;
+  readonly domain: ChartDomain;
+  readonly width: number;
+  readonly height: number;
+  readonly margin?: ChartMargin | undefined;
+  readonly dark: boolean;
+}
+
+/**
+ * Paint the weather layer into a 2D context.
+ *
+ * Pulled out of the component so that export can re-draw it rather than reuse
+ * the pixels on screen. Those pixels carry the viewer's theme, and a report
+ * printed from a dark-mode session would arrive with a near-black density map
+ * on white paper. Re-drawing costs one pass over a typed array, which is
+ * cheaper than the compositing that reusing them would need anyway.
+ *
+ * The context is assumed to be already scaled to CSS pixels; the caller owns
+ * device-pixel ratio, because on screen that is the display's and in an export
+ * it is the requested output scale.
+ */
+export function drawWeather(
+  context: CanvasRenderingContext2D,
+  { hours, mode, domain, width, height, margin, dark }: WeatherDrawing,
+): void {
+  context.clearRect(0, 0, width, height);
+  if (mode === 'off' || hours.length === 0) return;
+
+  const scales = createScales(domain, width, height, margin);
+  const plotLeft = scales.margin.left;
+  const plotTop = scales.margin.top;
+
+  // Everything stays inside the plot frame, exactly as the SVG layers do.
+  context.save();
+  context.beginPath();
+  context.rect(plotLeft, plotTop, scales.plotWidth, scales.plotHeight);
+  context.clip();
+
+  if (mode === 'scatter') {
+    // Semi-transparent dots, so overlapping hours accumulate into visible
+    // density rather than flattening into one opaque blob.
+    context.fillStyle = dark ? 'rgba(111, 176, 224, 0.35)' : 'rgba(59, 111, 174, 0.28)';
+    for (const hour of hours) {
+      const { x, y } = scales.project(hour.tdb, hour.w);
+      if (x < plotLeft || x > plotLeft + scales.plotWidth) continue;
+      if (y < plotTop || y > plotTop + scales.plotHeight) continue;
+      context.fillRect(x - 1, y - 1, 2, 2);
+    }
+  } else {
+    const grid = densityGrid(hours, domain);
+    const ramp = dark ? RAMP_DARK : RAMP_LIGHT;
+    const cellWidth = scales.plotWidth / grid.columns;
+    const cellHeight = scales.plotHeight / grid.rows;
+
+    for (let row = 0; row < grid.rows; row += 1) {
+      for (let column = 0; column < grid.columns; column += 1) {
+        const count = grid.counts[row * grid.columns + column]!;
+        if (count === 0) continue;
+
+        // Square-root scaling: hours-per-cell is heavily skewed, and a linear
+        // ramp leaves everything but the densest few cells indistinguishable.
+        const level = Math.sqrt(count / grid.peak);
+        const index = Math.min(ramp.length - 1, Math.floor(level * ramp.length));
+        context.fillStyle = ramp[index]!;
+
+        const x = plotLeft + column * cellWidth;
+        const y = plotTop + scales.plotHeight - (row + 1) * cellHeight;
+        // A half-pixel overdraw closes the hairline seams that otherwise show
+        // between cells at fractional sizes.
+        context.fillRect(x, y, cellWidth + 0.5, cellHeight + 0.5);
+      }
+    }
+  }
+
+  context.restore();
+}
+
 export function WeatherLayer({
   hours,
   mode,
@@ -63,57 +142,7 @@ export function WeatherLayer({
     if (!context) return;
 
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.clearRect(0, 0, width, height);
-
-    if (mode === 'off' || hours.length === 0) return;
-
-    const scales = createScales(domain, width, height, margin);
-    const plotLeft = scales.margin.left;
-    const plotTop = scales.margin.top;
-
-    // Everything stays inside the plot frame, exactly as the SVG layers do.
-    context.save();
-    context.beginPath();
-    context.rect(plotLeft, plotTop, scales.plotWidth, scales.plotHeight);
-    context.clip();
-
-    if (mode === 'scatter') {
-      // Semi-transparent dots, so overlapping hours accumulate into visible
-      // density rather than flattening into one opaque blob.
-      context.fillStyle = dark ? 'rgba(111, 176, 224, 0.35)' : 'rgba(59, 111, 174, 0.28)';
-      for (const hour of hours) {
-        const { x, y } = scales.project(hour.tdb, hour.w);
-        if (x < plotLeft || x > plotLeft + scales.plotWidth) continue;
-        if (y < plotTop || y > plotTop + scales.plotHeight) continue;
-        context.fillRect(x - 1, y - 1, 2, 2);
-      }
-    } else {
-      const grid = densityGrid(hours, domain);
-      const ramp = dark ? RAMP_DARK : RAMP_LIGHT;
-      const cellWidth = scales.plotWidth / grid.columns;
-      const cellHeight = scales.plotHeight / grid.rows;
-
-      for (let row = 0; row < grid.rows; row += 1) {
-        for (let column = 0; column < grid.columns; column += 1) {
-          const count = grid.counts[row * grid.columns + column]!;
-          if (count === 0) continue;
-
-          // Square-root scaling: hours-per-cell is heavily skewed, and a linear
-          // ramp leaves everything but the densest few cells indistinguishable.
-          const level = Math.sqrt(count / grid.peak);
-          const index = Math.min(ramp.length - 1, Math.floor(level * ramp.length));
-          context.fillStyle = ramp[index]!;
-
-          const x = plotLeft + column * cellWidth;
-          const y = plotTop + scales.plotHeight - (row + 1) * cellHeight;
-          // A half-pixel overdraw closes the hairline seams that otherwise show
-          // between cells at fractional sizes.
-          context.fillRect(x, y, cellWidth + 0.5, cellHeight + 0.5);
-        }
-      }
-    }
-
-    context.restore();
+    drawWeather(context, { hours, mode, domain, width, height, margin, dark });
   }, [hours, mode, domain, width, height, margin, dark]);
 
   return (

@@ -33,6 +33,10 @@ import { WalkthroughPanel } from './WalkthroughPanel.js';
 import { EducationContext } from './Tooltip.js';
 import { Icon } from '../icons/Icon.js';
 import { runCheck, WALKTHROUGH } from '../education/index.js';
+import { ExportPanel } from './ExportPanel.js';
+import { fromProject, readProject, type SessionState } from '../io/project.js';
+import { readFragment } from '../io/url.js';
+import type { ProjectMeta } from '../types/project.js';
 import { WeatherPanel, initialWeatherState, type WeatherState } from './WeatherPanel.js';
 import { WeatherLayer } from '../chart/WeatherLayer.js';
 import { convertHoursTo } from '../weather/epw.js';
@@ -57,7 +61,7 @@ import {
   formatVapourPressure,
 } from './format.js';
 
-type PressureMode = 'sea-level' | 'altitude' | 'explicit';
+import type { PressureMode } from '../io/project.js';
 
 /**
  * The system shown on first load: a single-zone cooling application with
@@ -124,6 +128,10 @@ export function App(): React.JSX.Element {
    */
   const [topicOverride, setTopicOverride] = useState<string | null>(null);
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
+  const [meta, setMeta] = useState<ProjectMeta>({});
+  /** Problems from opening a project or a share link, shown until dismissed. */
+  const [loadProblems, setLoadProblems] = useState<readonly string[]>([]);
+  const chartRef = useRef<SVGSVGElement | null>(null);
 
   /**
    * Whether the page is in its dark theme.
@@ -329,6 +337,129 @@ export function App(): React.JSX.Element {
   // formatters, independently of the clearing logic in the interaction hook.
   const hover = interaction.hover?.units === units ? interaction.hover : null;
 
+  /**
+   * Everything that survives being saved, in one object.
+   *
+   * Assembled rather than stored, so there is no second copy of the session to
+   * fall out of step with the first. The type lives in `io/project.ts`, which
+   * is what couples the App and the file format through one declaration.
+   */
+  const session: SessionState = useMemo(
+    () => ({
+      units,
+      domain,
+      pressureMode,
+      altitude,
+      explicitPressure,
+      stages,
+      visibility,
+      showProtractor,
+      comfort,
+      weather: weather.file
+        ? {
+            station: {
+              city: weather.file.location.city,
+              state: weather.file.location.state,
+              country: weather.file.location.country,
+              wmo: weather.file.location.wmo,
+              elevation: weather.file.location.elevation,
+            },
+            mode: weather.mode,
+            months: [...weather.filter.months],
+            hours: [...weather.filter.hours],
+            presetIndex: weather.presetIndex,
+          }
+        : null,
+      meta,
+    }),
+    [
+      units,
+      domain,
+      pressureMode,
+      altitude,
+      explicitPressure,
+      stages,
+      visibility,
+      showProtractor,
+      comfort,
+      weather,
+      meta,
+    ],
+  );
+
+  /**
+   * Adopt a project, from a file or from a link.
+   *
+   * Everything the file names is replaced wholesale; anything it does not name
+   * falls back to a default rather than keeping whatever happened to be on
+   * screen. Merging would produce a session that is neither the file the user
+   * opened nor the one they had.
+   */
+  const applyProject = useCallback((text: string): void => {
+    const result = readProject(text);
+    if (!result.project) {
+      setLoadProblems(result.problems);
+      return;
+    }
+
+    const next = fromProject(result.project);
+    setUnits(next.units);
+    setDomain(next.domain);
+    setPressureMode(next.pressureMode);
+    setAltitude(next.altitude);
+    setExplicitPressure(next.explicitPressure);
+    setStages(next.stages);
+    setVisibility(next.visibility);
+    setShowProtractor(next.showProtractor);
+    setComfort(next.comfort);
+    setMeta(next.meta);
+    // Session state, deliberately reset: a reopened project starts with nothing
+    // selected and no walkthrough running.
+    setSelectedStage(null);
+    setTopicOverride(null);
+    setWalkthroughStep(null);
+
+    const notes: string[] = [];
+    if (result.migrated.length > 0) {
+      notes.push(
+        `This project was written by an older version and has been upgraded ` +
+          `(from schema ${result.migrated.join(', then ')}). Save it to keep the upgrade.`,
+      );
+    }
+    // The weather file is named but never carried — see the schema. Saying so
+    // is the difference between "the overlay is missing" and "the overlay needs
+    // its file back".
+    if (next.weather?.station?.city) {
+      const station = [next.weather.station.city, next.weather.station.country]
+        .filter(Boolean)
+        .join(', ');
+      notes.push(
+        `This project used weather data for ${station}. Weather files are not ` +
+          'stored in a project — load the EPW again to restore the overlay.',
+      );
+    }
+    setLoadProblems(notes);
+  }, []);
+
+  /**
+   * Open a project carried in the URL fragment, once, on first load.
+   *
+   * The fragment is cleared afterwards so that a later reload does not undo
+   * whatever the user has done since — a share link should open a project, not
+   * become a permanent reset button.
+   */
+  useEffect(() => {
+    const result = readFragment(window.location.hash);
+    if (!result) return;
+
+    if (result.project) {
+      applyProject(JSON.stringify(result.project));
+    } else {
+      setLoadProblems(result.problems);
+    }
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, [applyProject]);
+
   /** Selecting a component means "tell me about this", so it wins. */
   const selectStage = useCallback((index: number | null) => {
     setSelectedStage(index);
@@ -447,11 +578,37 @@ export function App(): React.JSX.Element {
             onSelectStage={selectStage}
             onDragState={dragSource}
             comfortZones={zones}
+            exportRef={chartRef}
           />
           <p className="chart-hint">Scroll to zoom · drag to pan</p>
         </div>
 
         <aside className="panel panel-right">
+          {loadProblems.length > 0 && (
+            <div className="load-notice">
+              {loadProblems.map((problem) => (
+                <p key={problem}>{problem}</p>
+              ))}
+              <button type="button" className="reset" onClick={() => setLoadProblems([])}>
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          <Collapsible title="Save, share, export" defaultOpen={false}>
+            <ExportPanel
+              session={session}
+              solved={supply}
+              units={units}
+              atmosphere={atmosphere}
+              domain={domain}
+              chartRef={chartRef}
+              weather={{ hours: weather.file?.hours ?? [], mode: weather.mode }}
+              onMetaChange={setMeta}
+              onOpen={applyProject}
+            />
+          </Collapsible>
+
           <Collapsible
             title="Weather data"
             defaultOpen={false}

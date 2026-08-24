@@ -49,6 +49,15 @@ export interface ChartProps {
   onDragState?: ((stageIndex: number, tdb: number, w: number) => void) | undefined;
   /** ASHRAE 55 comfort zones to fill beneath the process chain. */
   comfortZones?: readonly ComfortZone[] | undefined;
+  /**
+   * Receives the live `<svg>` element, for export.
+   *
+   * The chart already keeps a ref of its own for hit-testing; this hands the
+   * same element out rather than re-querying the DOM by class name, which would
+   * be a second way to find the chart and one that breaks silently when the
+   * class changes.
+   */
+  exportRef?: React.RefObject<SVGSVGElement | null> | undefined;
 }
 
 /** Build an SVG path from points in psychrometric space. */
@@ -183,6 +192,7 @@ export function Chart({
   onSelectStage,
   onDragState,
   comfortZones,
+  exportRef,
 }: ChartProps): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scales = useMemo(() => createScales(domain, width, height), [domain, width, height]);
@@ -247,7 +257,10 @@ export function Chart({
 
   return (
     <svg
-      ref={svgRef}
+      ref={(node) => {
+        svgRef.current = node;
+        if (exportRef) exportRef.current = node;
+      }}
       className="psych-chart"
       width={width}
       height={height}

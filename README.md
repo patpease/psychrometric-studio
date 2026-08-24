@@ -14,12 +14,13 @@ follow ASHRAE Standard 55-2023.
 
 ## Status
 
-**Phase 6 complete** — an interactive psychrometric chart, seventeen equipment
+**Phase 7 complete** — an interactive psychrometric chart, seventeen equipment
 types solved as a chain with verified energy balance, ASHRAE 55 thermal comfort,
-EPW weather import with density mapping and hours-in-zone statistics, and a
-teaching layer: tooltips on every term, a component reference that follows the
-selection, live design checks on the solved system, and one guided walkthrough.
-Export and IO is Phase 7. See [PLAN.md](PLAN.md) for the full roadmap.
+EPW weather import with density mapping and hours-in-zone statistics, a teaching
+layer (tooltips, a component reference that follows the selection, live design
+checks, one guided walkthrough), and export: project files, share links, CSV,
+PNG, SVG, and a branded PDF report. Deployment is Phase 8. See
+[PLAN.md](PLAN.md) for the full roadmap.
 
 | Phase | Deliverable | Status |
 |---|---|---|
@@ -30,8 +31,8 @@ Export and IO is Phase 7. See [PLAN.md](PLAN.md) for the full roadmap.
 | 4 | Coil detail, energy recovery, advanced processes | ✅ done |
 | 5 | EPW import, scatter, density bins, hours-in-zone | ✅ done |
 | 6 | Education — tooltips, component panel, live checks, one walkthrough | ✅ done |
-| 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | next |
-| 8 | Deploy, docs, polish | |
+| 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF | ✅ done |
+| 8 | Deploy, docs, polish | next |
 
 ## Layout
 
@@ -44,11 +45,13 @@ web/       Vite + TypeScript front end — owns every interactive calculation
   src/weather/   EPW parsing, density binning, hours-in-zone
   src/education/ equipment and concept content, live design checks, walkthrough
   src/icons/     equipment SVGs and the build-time generator
+  src/io/        project files, share links, CSV, SVG/PNG export, report client
   src/config/    branding and legal text (single source of truth)
   src/types/     project file types, mirroring the JSON Schema
   vendor/        vendored PsychroLib + provenance
   tests/         engine validation, including the ASHRAE reference gate
 api/       FastAPI — PDF reports and the CI comfort oracle. Deliberately thin.
+             It lays out; it never calculates.
 shared/schema/   project.schema.json — authoritative project file format
 docs/            calculation reference and architecture decisions
 scripts/         vendoring and verification
@@ -97,8 +100,10 @@ cd web && npm run dev
   from, how to cite them, and why there is no direct-download button.
 - **[ADR 0003](docs/adr/0003-umd-interop.md)** — why a green test suite is not
   evidence that the browser works, and what was done about it.
+- **[ADR 0004](docs/adr/0004-export-styling.md)** — why exports inline computed
+  styles, and the two ways of getting that wrong that produce a valid file.
 
-Five rules that the tests enforce and that are easy to break by accident:
+Six rules that the tests enforce and that are easy to break by accident:
 
 1. **Never import `vendor/psychrolib.js` directly.** Go through
    `src/psych/psychrolib.ts` and `lib(units)`.
@@ -111,11 +116,27 @@ Five rules that the tests enforce and that are easy to break by accident:
 4. **Enthalpy is not comparable across unit systems.** The IP and SI datums
    differ (0 °F vs 0 °C). Only enthalpy *differences* convert. See
    [calculation-reference §5](docs/calculation-reference.md).
-5. **A design check must stay silent on a good design.** Rules in
+5. **The API lays out; it does not calculate.** Every number in a report is
+   computed in the browser and sent already solved. A service that re-derived
+   duties from state points would drift from the chart on screen, and the report
+   would be the thing that was wrong.
+6. **A design check must stay silent on a good design.** Rules in
    `src/education/checks.ts` are tested against the system the tool opens with,
    in *both* unit systems. A rule that fires there has taught the user to ignore
    every rule. Thresholds are declared in kelvin and converted; never compare a
    Fahrenheit delta against a Celsius limit.
+
+### Running the report service
+
+```bash
+cd api && python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m uvicorn app.main:app --port 8000
+```
+
+The web application works without it. The PDF button appears only once
+`/health` answers, so the export is never a promise the tool cannot keep. Two
+environment variables matter in deployment: `VITE_API_URL` at build time for the
+front end, and `PSYCHRO_ALLOWED_ORIGINS` on the service, which must name the
+deployed front end or the browser will refuse the request.
 
 ### Editing the content
 

@@ -100,6 +100,9 @@ export interface ProjectMeta {
 
 export interface ChartSettings {
   tdbRange?: [number, number];
+  /** Both ends of the humidity axis, canonical. The view pans as well as zooms. */
+  humidityRatioRange?: [number, number];
+  /** @deprecated Superseded by `humidityRatioRange`; still read. */
   maxHumidityRatio?: number;
   projection?: 'rectangular' | 'oblique';
   families?: {
@@ -115,14 +118,43 @@ export interface ChartSettings {
 export interface ComfortSettings {
   model?: 'pmv' | 'adaptive';
   metabolicRate?: number;
+  clothingWinter?: number;
+  clothingSummer?: number;
+  /** @deprecated Superseded by the two named levels; still read as [winter, summer]. */
   clothing?: number[];
   airSpeed?: number;
   meanRadiantTemperatureOffset?: number;
+  /** Indoor operative temperature for the adaptive model, in project units. */
+  adaptiveIndoor?: number;
+  /** Prevailing mean outdoor temperature, in project units. */
+  adaptivePrevailing?: number;
   /**
    * Reserved for the SET elevated-air-speed cooling effect. Zero in v1.
    * @see PLAN.md §6.4
    */
   temperatureOffset?: number;
+}
+
+/**
+ * How the weather overlay was set up.
+ *
+ * The EPW itself is not stored — see the schema for why. What is stored is
+ * enough to name the station, so that opening a project can say "this used
+ * Denver Intl AP" rather than silently starting with no weather at all.
+ */
+export interface WeatherSettings {
+  station?: {
+    city?: string;
+    state?: string;
+    country?: string;
+    wmo?: string;
+    /** Site elevation in the project's units at the time of saving. */
+    elevation?: number;
+  };
+  mode?: 'off' | 'scatter' | 'density';
+  months?: number[];
+  hours?: number[];
+  presetIndex?: number;
 }
 
 export interface Project {
@@ -133,6 +165,7 @@ export interface Project {
   airstreams: Airstream[];
   chart?: ChartSettings;
   comfort?: ComfortSettings;
+  weather?: WeatherSettings;
 }
 
 export type { StateInput };

@@ -9,3 +9,6 @@ __pycache__/
 *.local
 dist/
 .DS_Store
+
+# Editable-install metadata, created by pip.
+*.egg-info/

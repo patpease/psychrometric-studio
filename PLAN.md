@@ -502,18 +502,50 @@ glossary, and a reason to keep the registry keyed by name rather than by type.
 
 ## 9. Persistence and export
 
+*Delivered in Phase 7; see §22 for outcomes.*
+
 | Output | Where | Notes |
 |---|---|---|
-| Project JSON | Client | Full system definition, chart settings, comfort inputs, metadata. Versioned against `shared/schema/project.schema.json`. Migration path from day one. |
-| Shareable URL | Client | Compressed state in the fragment. Falls back to "too large — download the project file" above the URL length limit, which EPW data will exceed. |
-| CSV | Client | All solved state points and process loads. |
-| PNG | Client | Canvas + SVG composited. |
-| SVG / vector PDF | Client | Serialise the live SVG; embed fonts. |
-| Branded PDF report | API | ReportLab. Chart, state-point table, process summary, loads, project metadata, calculation basis, and version stamp. |
+| Project JSON | Client | Full system definition, chart view, comfort inputs, weather station, metadata. Versioned against `shared/schema/project.schema.json`, with the migration registry in place from the start. |
+| Shareable URL | Client | Deflated and base64url'd into the **fragment**, which browsers never send to a server. Refuses above 2,000 characters and offers the project file instead. |
+| CSV | Client | All solved state points and process loads, behind a commented provenance block. |
+| PNG | Client | The serialised SVG rasterised at 2×, weather layer composited. |
+| SVG | Client | The live chart with every computed style inlined, resolved against a light palette. |
+| Branded PDF report | API | ReportLab. Chart, state-point table, process summary, totals, calculation basis, and a per-page version stamp. |
 
 Every export carries the app version, calculation basis, barometric pressure,
 and unit system. bh-psych got this right and it is worth preserving — a report
 that cannot be traced to the release that produced it is a liability.
+
+### What the format stores
+
+**What the user declared, never what the solver worked out.** A file records
+that the coil leaves at 54 °F and 93% RH, not that it therefore removes 75.5
+MBH, so reopening at a different site pressure re-solves rather than carrying
+yesterday's answers forward under today's assumptions.
+
+**Not the weather file.** An EPW is around 1.5 MB, is redistributable only under
+its source's terms, and is reproducible from the station identity. The project
+stores the station and the overlay settings; on load the tool names the station
+and asks for the file again.
+
+### Two validators, on purpose
+
+The JSON Schema is authoritative. The application also ships a hand-written
+validator, because a schema says `/airstreams/0/stages/2/airflow must be > 0`
+and a user needs to be told which stage by name — and because shipping a
+general-purpose validator to parse one small file is a poor trade for a single
+page. Every fixture in `tests/project-io.test.ts` goes through both, and a
+verdict mismatch fails the suite.
+
+### The API boundary
+
+The report service **lays out; it does not calculate**. Every number is computed
+in the browser and sent already solved. A service that re-derived duties from
+state points would eventually disagree with the chart on screen, and the report
+would be the thing that was wrong. The consequence to be honest about: the
+endpoint faithfully typesets whatever it is given, and is a rendering service
+rather than a check on the client.
 
 ---
 
@@ -556,7 +588,7 @@ Accuracy is the product. Testing is not an afterthought here.
 | 4 | Coil detail, energy recovery, advanced processes | ✅ **Complete** — both guards proven; see §19 |
 | 5 | EPW import, scatter, density bins, hours-in-zone | ✅ **Complete** — real TMYx file parses clean; see §20 |
 | 6 | Education — tooltips, component panel, live checks, one walkthrough | ✅ **Complete** — 395 tests passing; see §21 |
-| 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF API | Round-trip save/load fidelity |
+| 7 | Export and IO — JSON, URL, CSV, PNG, SVG, PDF API | ✅ **Complete** — 442 web + 10 API tests; see §22 |
 | 8 | Deploy, docs, calculation reference, polish | Public URL live |
 
 Phases 1–3 are the core product. Phase 3's gate — *matching the CBE tool for
@@ -1166,3 +1198,96 @@ direction that flatters the ventilation rate.
   Phase 5). The concept entry for `prevailing-mean` now describes it, which
   makes the gap more visible than it was.
 - Walkthrough progress is not persisted, and is not in the project schema.
+
+---
+
+## 22. Phase 7 outcome
+
+*Completed 2026-08-24. 442 web tests and 10 API tests passing, type check clean,
+production build green, every export exercised in the browser.*
+
+Delivered:
+
+- `web/src/io/` — `project.ts` (session ↔ file, migration registry),
+  `validate.ts`, `url.ts`, `csv.ts`, `image.ts`, `report.ts`, `download.ts`.
+- `web/src/ui/ExportPanel.tsx`; project metadata, save/open, share link, CSV,
+  PNG, SVG, PDF.
+- `api/app/models.py`, `api/app/report.py`, `POST /report`, CORS, a body-size
+  limit.
+- Schema additions: `humidityRatioRange`, named clothing levels, adaptive
+  inputs, `weatherSettings`.
+- `web/tests/project-io.test.ts` (47 tests), `api/tests/test_report.py` (10).
+
+### The gate
+
+*"Round-trip save/load fidelity."* A session is saved, reopened, and compared
+field by field; the same is done through a share link. Both were also driven in
+the browser: a project was renamed, its coil retuned to 52 °F, shared as an
+889-character link, reloaded from that link, and came back identical.
+
+### Findings
+
+**The light-theme export was a no-op, and the file looked fine.** The serialiser
+mounts a clone inside a `data-theme="light"` container so exports do not carry
+the viewer's theme — then read computed styles from the *original* element. It
+compiled, it produced a valid standalone SVG, and it exported the dark palette:
+volume lines came out `rgb(177,139,234)` where the light value is
+`rgb(122,75,189)`. Nothing about the code reads as wrong. Caught by comparing a
+stroke in the output against the palette, not by looking at the picture.
+
+**Stripping a parent's class before reading its children turns half the chart
+black.** Much of the stylesheet is descendant rules — `.comfort-zone-0 path`,
+`.gridlines line`, `.axis text`. Removing the class as each element was
+processed stopped those rules matching for everything below it, and the
+children fell back to the initial value: opaque black. The translucent comfort
+zone exported as a solid black block. Fixed by reading the whole tree before
+writing any of it, which is now the documented invariant.
+
+**A positional `[clothing]` array does not say which end is which.** The schema
+described "winter (1.0) and summer (0.5)" while defaulting to `[0.5, 1.0]`, and
+the app held `[winter, summer]`. A reader that guessed wrong would swap the two
+comfort zones silently. Replaced with `clothingWinter` and `clothingSummer`; the
+array is still read, documented as `[winter, summer]`.
+
+**Storing only the top of the humidity axis loses the pan.** `maxHumidityRatio`
+assumed the axis starts at zero. It does when zoomed out and does not once
+panned. Replaced with `humidityRatioRange`; the old field is still read as the
+top of an axis starting at zero.
+
+**Outdoor-air mass, again.** The share-link and CSV paths surfaced no new
+instances, but the report payload sends humidity ratio in display units
+(gr/lb) rather than canonical lb/lb, because the API is handed numbers to
+typeset and has no unit system of its own. That boundary is stated in
+`models.py` rather than left to be inferred.
+
+### Verified, not assumed
+
+- SVG export: no `var(--…)` and no `class` attributes survive; strokes resolve
+  to the light palette while the page is in dark mode; comfort zones export as
+  `rgba(47,127,209,0.13)` and `rgba(194,97,10,0.13)`.
+- PNG: 1640 × 1737 at 2×, 632 KB, ninety-nine distinct sampled colours — not the
+  blank white rectangle that a broken rasterisation produces.
+- PDF: 496 KB returned from the running service through CORS, `%PDF-1.4` header,
+  chart embedded.
+- Rejecting a bad file leaves the current session untouched, and names the
+  offending stage — "Airstream 1, stage "Cooling coil" has an airflow that is
+  not a positive number" — rather than a JSON pointer.
+
+### On the Python version
+
+The API declares `requires-python = ">=3.12"` and CI runs it there. This machine
+has only 3.9.6, so the code was written to run on both — `from __future__ import
+annotations`, `Optional`/`Dict`/`List` rather than `|` — and the ten API tests
+were run locally on 3.9 rather than shipped unverified. CI remains the authority
+for 3.12.
+
+### Carried into Phase 8
+
+- Only the supply airstream is editable. A multi-airstream file is valid, and
+  its other streams are preserved on load, but the editor does not show them.
+- `VITE_API_URL` defaults to the development port. Deployment must set it, or
+  the health check fails and the PDF button correctly does not appear.
+- `PSYCHRO_ALLOWED_ORIGINS` must name the deployed front end, or the browser
+  refuses the report request.
+- Six equipment icons still pending from the user.
+- `dailyMeansBefore` remains unwired to the adaptive panel.
