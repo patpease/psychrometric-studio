@@ -60,6 +60,9 @@ docs/            calculation reference and architecture decisions
 scripts/         vendoring and verification
 ```
 
+New to the codebase? Read [CLAUDE.md](CLAUDE.md) — it is the orientation.
+[BACKLOG.md](BACKLOG.md) is what is open.
+
 ## Deploying
 
 A static site on Cloudflare Pages: root directory `web`, build `npm run build`,
