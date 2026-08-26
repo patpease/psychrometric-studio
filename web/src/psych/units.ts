@@ -230,7 +230,7 @@ export interface SystemDefaults {
 export const DEFAULTS: Record<UnitSystem, SystemDefaults> = {
   IP: {
     standardPressure: 14.695948775, // psia
-    tdbRange: [20, 120],
+    tdbRange: [0, 130],
     maxHumidityRatio: 0.03,
     precision: {
       temperature: 1,
@@ -251,7 +251,7 @@ export const DEFAULTS: Record<UnitSystem, SystemDefaults> = {
   },
   SI: {
     standardPressure: 101325, // Pa
-    tdbRange: [-10, 50],
+    tdbRange: [-20, 55],
     maxHumidityRatio: 0.03,
     precision: {
       temperature: 1,

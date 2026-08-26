@@ -10,15 +10,28 @@ a slide — comes out looking like the tool rather than near it.
 
 ## Two palettes, one mechanism
 
-Colours are CSS custom properties defined twice: once on `:root` and
-`[data-theme="light"]`, once inside a `prefers-color-scheme: dark` block guarded
-with `:not([data-theme="light"])`. Nothing in the renderer knows which theme is
-active; it emits `var(--family-rh)` and the cascade resolves it.
+Colours are CSS custom properties, and the palette is declared in **three**
+places:
 
-That `[data-theme="light"]` selector is not decoration. Chart export mounts a
-hidden clone inside it so a report never carries the viewer's dark theme — see
-ADR 0004. Any new colour must be defined in **both** blocks or exports will
-silently fall back to black.
+| Block | Serves |
+|---|---|
+| `:root, [data-theme='light']` | The light palette, and anything forced light |
+| `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) }` | A viewer whose system asks for dark |
+| `[data-theme='dark']` | A viewer who *pressed* the moon on a light system |
+
+Nothing in the renderer knows which is active; it emits `var(--family-rh)` and
+the cascade resolves it. The two dark blocks are byte-identical by necessity —
+plain CSS cannot share one declaration block between a media query and a bare
+selector — and `web/tests/theme.test.ts` asserts they stay token-for-token
+equal. **Add a colour to all three or exports and forced themes fall back to an
+initial value**, which for `fill` is opaque black.
+
+The `[data-theme="light"]` half of the first selector is not decoration: chart
+export mounts a hidden clone inside a light container so a report never carries
+the viewer's theme (ADR 0004). Custom properties inherit from the nearest
+ancestor that defines them, so that clone wins even when `<html>` carries an
+explicit `data-theme="dark"` — verified, because it is exactly the kind of
+interaction that looks fine and is not.
 
 ### Surface and ink
 
@@ -73,11 +86,15 @@ to dismiss both.
 
 ## Icons
 
-Sixty SVGs in `web/src/icons/svg/`, compiled to a TypeScript module at build
+Sixty-two SVGs in `web/src/icons/svg/`, compiled to a TypeScript module at build
 time by `scripts/build-icons.mjs`. Seventeen are mapped to stage types in
-`icons/map.ts`; the other forty-three — chillers, boilers, VAV boxes, terminal
-units, diffusers — are drawn and unused, and are a ready-made vocabulary for
-system diagrams.
+`icons/map.ts`; `sun` and `moon` drive the appearance toggle; the remaining
+forty-three — chillers, boilers, VAV boxes, terminal units, diffusers — are
+drawn and unused, and are a ready-made vocabulary for system diagrams.
+
+Icons are not only for equipment. `sun` and `moon` sit in the header beside the
+unit switch and inherit the button's colour through `currentColor`, which is why
+the active state needs no rule of its own.
 
 **Rules a new icon must follow**, because the generator or the tests will
 otherwise reject it:

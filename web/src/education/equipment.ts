@@ -38,10 +38,12 @@ export const EQUIPMENT: Readonly<Record<StageType, EducationEntry>> = Object.fre
     title: 'Entering air',
     kind: 'Defined state',
     icon: icon('source'),
-    moves: [
-      { property: 'tdb', direction: 'input' },
-      { property: 'rh', direction: 'input' },
-    ],
+    // Deliberately empty, and the panel omits the section when it is.
+    // "What moves" answers *what this process does to the air*, and a defined
+    // state does nothing to it: there is no entering condition to compare
+    // against, so both rows could only ever have read "is an input". A table
+    // restating the two fields directly above it is noise.
+    moves: [],
     text:
       'The starting point of the airstream — outdoor air, return air, or any ' +
       'measured condition. Everything downstream is solved from here, so the ' +

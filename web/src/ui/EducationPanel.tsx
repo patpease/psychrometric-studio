@@ -201,8 +201,14 @@ function EquipmentBody({
     <>
       <p className="edu-text">{entry.text}</p>
 
-      <h4>What moves</h4>
-      <MovesTable moves={entry.moves} observed={observed} units={units} />
+      {/* A stage with nothing to say about movement says nothing — see the
+          `source` entry, which is a declared state rather than a process. */}
+      {entry.moves.length > 0 && (
+        <>
+          <h4>What moves</h4>
+          <MovesTable moves={entry.moves} observed={observed} units={units} />
+        </>
+      )}
 
       <h4>What to check</h4>
       <p className="edu-check">{entry.check}</p>

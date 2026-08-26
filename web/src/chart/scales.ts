@@ -74,18 +74,37 @@ export interface ChartScales {
   containsPixel(x: number, y: number): boolean;
 }
 
-export const DEFAULT_MARGIN: ChartMargin = { top: 24, right: 96, bottom: 56, left: 24 };
+/**
+ * Plot margins.
+ *
+ * `right` carries the humidity-ratio axis — ticks, their labels, and the
+ * rotated axis title — and `bottom` carries dry bulb the same way. They are
+ * equal so the two axes read as a matched pair; the right was noticeably wider
+ * for no reason other than that it had never been measured against the bottom.
+ */
+export const DEFAULT_MARGIN: ChartMargin = { top: 24, right: 56, bottom: 56, left: 24 };
 
 /**
  * The default view for a unit system.
  *
- * Ranges match the familiar ASHRAE "normal temperature" charts: 32–120 °F with
- * W to 0.028 in IP, 0–50 °C with W to 0.030 in SI.
+ * IP is the specified pair: 5–110 °F, and 0–170 gr/lb of moisture. Going below
+ * freezing is what makes the chart usable for winter work — heating, preheat,
+ * and frost on a recovery device all live to the left of 32 °F, and a chart
+ * that starts there cannot show them.
+ *
+ * The humidity ceiling is expressed here in canonical lb/lb. 170 gr/lb is the
+ * number on the axis; dividing by 7000 is the only place that conversion is
+ * written by hand rather than going through `humidityRatioToDisplay`, and it is
+ * pinned by a test.
+ *
+ * SI is set to the nearest round equivalent — −15 to 45 °C and 24 g/kg — rather
+ * than left where it was, so switching unit systems reframes the chart without
+ * also moving the window.
  */
 export function defaultDomain(units: UnitSystem): ChartDomain {
   return units === 'IP'
-    ? { tdbMin: 32, tdbMax: 120, wMin: 0, wMax: 0.028 }
-    : { tdbMin: 0, tdbMax: 50, wMin: 0, wMax: 0.03 };
+    ? { tdbMin: 5, tdbMax: 110, wMin: 0, wMax: 170 / 7000 }
+    : { tdbMin: -15, tdbMax: 45, wMin: 0, wMax: 0.024 };
 }
 
 /** The widest view the user may zoom out to, per unit system. */

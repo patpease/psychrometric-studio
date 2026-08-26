@@ -122,6 +122,62 @@
   }
 }
 
+/*
+ * The same palette again, for a theme the user has *chosen* rather than
+ * inherited.
+ *
+ * The media query above only fires when the operating system asks for dark, so
+ * it cannot serve someone on a light system who has pressed the moon. There is
+ * no way in plain CSS to share one declaration block between a media query and
+ * a bare selector, so the values are repeated — and
+ * `tests/theme.test.ts` asserts the two blocks are token-for-token identical,
+ * which is what makes the duplication safe rather than a slow leak.
+ */
+[data-theme='dark'] {
+  --bg: #10151b;
+  --surface: #171e26;
+  --border: #2a3543;
+  --ink: #e6ecf3;
+  --ink-muted: #93a1b1;
+  /* The identity green is too dark to read on a dark surface; the bright
+     green from the mark's bottom rule carries the accent role instead. */
+  --accent: #3FC98A;
+  --accent-bright: #6FE0AC;
+
+  --plot-bg: #141a21;
+  --grid: #202934;
+  --frame: #4a5766;
+
+  /* Lifted and desaturated for legibility on a dark plot without vibrating. */
+  --family-saturation: #cfe0f0;
+  --family-rh: #6cb0ee;
+  --family-wetbulb: #45c7b3;
+  --family-enthalpy: #f0a355;
+  --family-volume: #b18bea;
+  --family-dewpoint: #8d99a8;
+
+  --hover: #ff7a96;
+
+  --process: #45C7B3;
+  --process-selected: #F0A355;
+  --warn: #E0A050;
+  --warn-ink: #F0C48A;
+  --warn-bg: #33270F;
+  --danger: #F08078;
+  --danger-bg: #34191A;
+  --note: #6CB0EE;
+  --note-ink: #A9D2F5;
+  --note-bg: #17232F;
+  --ok-ink: #7EDCAB;
+  --ok-bg: #12291F;
+  --selected-bg: #1D2A31;
+
+  --comfort-winter: rgba(108, 176, 238, 0.16);
+  --comfort-winter-line: rgba(108, 176, 238, 0.6);
+  --comfort-summer: rgba(240, 163, 85, 0.16);
+  --comfort-summer-line: rgba(240, 163, 85, 0.6);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1955,4 +2011,38 @@ body {
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------- appearance toggle */
+
+.header-toggles {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Shares the unit toggle's shell so the two read as one control cluster. The
+   buttons are square because they hold an icon rather than a word. */
+.theme-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.45rem;
+  line-height: 1;
+}
+
+.theme-toggle .icon {
+  display: block;
+  /* The icons inherit their outline from `currentColor`, so the active state
+     needs no separate rule — the button's own colour carries it. */
+  color: currentColor;
+}
+
+/* The units row. Muted and rule-separated so it reads as an annotation on the
+   table rather than as another row of data. */
+.results tfoot td {
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-size: 0.68rem;
 }

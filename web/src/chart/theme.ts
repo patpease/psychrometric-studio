@@ -14,8 +14,21 @@ export interface FamilyStyle {
   readonly colour: string;
   readonly width: number;
   readonly dash?: string;
-  /** Which end of a line carries its label. */
-  readonly labelAt: 'start' | 'end';
+  /**
+   * Where along a line its label sits.
+   *
+   * `start` and `end` place it just outside the line's first or last point,
+   * which is right for families that terminate on the saturation curve — the
+   * label sits in open space beside the curve.
+   *
+   * `fraction` places it *on* the line, partway along, and is right for
+   * families whose ends run into the corners of the plot. A relative-humidity
+   * curve ends at the top-right boundary, where a label pushed outward is
+   * clipped by the plot frame and unreadable.
+   */
+  readonly labelAt: 'start' | 'end' | 'fraction';
+  /** How far along the line, 0–1, when `labelAt` is `fraction`. */
+  readonly labelFraction?: number;
   /**
    * Distance in pixels to push the label back along the line, away from its
    * endpoint. Wet-bulb and enthalpy lines both terminate on the saturation
@@ -38,8 +51,13 @@ export const FAMILY_STYLES: Record<FamilyKey, FamilyStyle> = {
   relativeHumidity: {
     colour: 'var(--family-rh)',
     width: 1,
-    labelAt: 'end',
-    labelOffset: 4,
+    // On the curve rather than past its end. RH curves sweep into the top-right
+    // corner, so an end label lands on or outside the frame and is clipped
+    // away. Two-thirds along puts the whole family in a readable arc across the
+    // chart, which is also where printed charts carry them.
+    labelAt: 'fraction',
+    labelFraction: 0.66,
+    labelOffset: 0,
     displayName: 'Relative humidity',
   },
   wetBulb: {

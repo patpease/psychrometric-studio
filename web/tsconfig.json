@@ -17,7 +17,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": [
-      "vitest/globals"
+      "vitest/globals",
+      "node"
     ],
     "jsx": "react-jsx",
     "baseUrl": ".",

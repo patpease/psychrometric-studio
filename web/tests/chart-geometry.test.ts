@@ -28,6 +28,7 @@ import {
 } from '../src/chart/families.js';
 import { slopeForShr, shrForSlope, protractorRays } from '../src/chart/protractor.js';
 import { lib } from '../src/psych/psychrolib.js';
+import { humidityRatioToDisplay } from '../src/psych/units.js';
 import { DEFAULTS, type UnitSystem } from '../src/psych/units.js';
 
 const SYSTEMS: UnitSystem[] = ['IP', 'SI'];
@@ -333,5 +334,45 @@ describe.each(SYSTEMS)('protractor — %s', (units) => {
     const rays = protractorRays(units, 10, 20000);
     expect(rays[0]!.shr).toBe(0);
     expect(rays[rays.length - 1]!.shr).toBe(1);
+  });
+});
+
+describe('the default view', () => {
+  it('frames the specified IP window', () => {
+    // Pinned because these are chosen numbers, not derived ones: 5 to 110 °F
+    // and 0 to 170 gr/lb. The humidity ceiling is stored canonically, so the
+    // assertion converts rather than restating the fraction.
+    const domain = defaultDomain('IP');
+    expect(domain.tdbMin).toBe(5);
+    expect(domain.tdbMax).toBe(110);
+    expect(domain.wMin).toBe(0);
+    expect(humidityRatioToDisplay(domain.wMax, 'IP')).toBeCloseTo(170, 9);
+  });
+
+  it('frames a comparable SI window', () => {
+    const domain = defaultDomain('SI');
+    expect(domain.tdbMin).toBe(-15);
+    expect(domain.tdbMax).toBe(45);
+    expect(humidityRatioToDisplay(domain.wMax, 'SI')).toBeCloseTo(24, 9);
+  });
+
+  it('sits inside the limits the user may zoom out to', () => {
+    // The default view starting below the widest allowed view would snap the
+    // chart on the first pan — and the default now reaches below freezing,
+    // which the old limits did not.
+    for (const units of ['IP', 'SI'] as const) {
+      const domain = defaultDomain(units);
+      const limits = domainLimits(units);
+      expect(domain.tdbMin, `${units} min`).toBeGreaterThanOrEqual(limits.tdbMin);
+      expect(domain.tdbMax, `${units} max`).toBeLessThanOrEqual(limits.tdbMax);
+      expect(domain.wMax, `${units} wMax`).toBeLessThanOrEqual(limits.wMax);
+    }
+  });
+
+  it('leaves the same room for each axis title', () => {
+    // The humidity axis runs down the right and dry bulb along the bottom; the
+    // right margin was wider for no reason beyond never having been compared
+    // with the bottom.
+    expect(DEFAULT_MARGIN.right).toBe(DEFAULT_MARGIN.bottom);
   });
 });

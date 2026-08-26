@@ -22,7 +22,7 @@ import {
   type ChartLine,
   type FamilyKey,
 } from './families.js';
-import { FAMILY_STYLES, DRAW_ORDER } from './theme.js';
+import { FAMILY_STYLES, DRAW_ORDER, type FamilyStyle } from './theme.js';
 import { protractorRays } from './protractor.js';
 import { humidityRatioToDisplay, LABELS, type UnitSystem } from '../psych/units.js';
 import { ProcessOverlay, ProcessArrowMarker } from './ProcessOverlay.js';
@@ -71,15 +71,34 @@ function pathFrom(points: readonly DataPoint[], scales: ChartScales): string {
     .join(' ');
 }
 
-/** Angle in degrees of the line's tangent at the labelled end. */
-function labelAngle(points: readonly DataPoint[], scales: ChartScales, atStart: boolean): number {
+/**
+ * Angle in degrees of the line's tangent at a given point.
+ *
+ * Measured against the *next* point, or the previous one at the far end, so a
+ * label always follows the direction the curve is actually travelling rather
+ * than a chord across it.
+ */
+function tangentAngle(
+  points: readonly DataPoint[],
+  scales: ChartScales,
+  index: number,
+): number {
   if (points.length < 2) return 0;
-  const [a, b] = atStart
-    ? [points[0]!, points[1]!]
-    : [points[points.length - 2]!, points[points.length - 1]!];
+  const i = Math.min(Math.max(index, 0), points.length - 1);
+  const [a, b] = i === points.length - 1 ? [points[i - 1]!, points[i]!] : [points[i]!, points[i + 1]!];
   const pa = scales.project(a.tdb, a.w);
   const pb = scales.project(b.tdb, b.w);
   return (Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180) / Math.PI;
+}
+
+/** Which point of a line carries its label. */
+function labelIndex(points: readonly DataPoint[], style: FamilyStyle): number {
+  if (style.labelAt === 'start') return 0;
+  if (style.labelAt === 'end') return points.length - 1;
+  // Pulled one point clear of each end so a short trace — a curve clipped to a
+  // sliver by zooming — still labels somewhere on itself rather than at a tip.
+  const at = Math.round((style.labelFraction ?? 0.5) * (points.length - 1));
+  return Math.min(Math.max(at, 1), Math.max(points.length - 2, 0));
 }
 
 function LineFamily({
@@ -97,11 +116,13 @@ function LineFamily({
     <g className={`family family-${family}`}>
       {lines.map((line, index) => {
         const atStart = style.labelAt === 'start';
-        const anchorPoint = atStart ? line.points[0] : line.points[line.points.length - 1];
+        const onLine = style.labelAt === 'fraction';
+        const at = labelIndex(line.points, style);
+        const anchorPoint = line.points[at];
         if (!anchorPoint) return null;
 
         const anchor = scales.project(anchorPoint.tdb, anchorPoint.w);
-        const angle = labelAngle(line.points, scales, atStart);
+        const angle = tangentAngle(line.points, scales, at);
         // Keep text upright: flip any label that would read upside-down.
         const upright = angle > 90 || angle < -90 ? angle + 180 : angle;
 
@@ -120,9 +141,9 @@ function LineFamily({
                 className="line-label"
                 x={anchor.x}
                 y={anchor.y}
-                dx={atStart ? -style.labelOffset : style.labelOffset}
+                dx={onLine ? 0 : atStart ? -style.labelOffset : style.labelOffset}
                 dy={-3}
-                textAnchor={atStart ? 'end' : 'start'}
+                textAnchor={onLine ? 'middle' : atStart ? 'end' : 'start'}
                 transform={`rotate(${upright.toFixed(1)} ${anchor.x.toFixed(2)} ${anchor.y.toFixed(2)})`}
                 fill={style.colour}
               >
@@ -379,8 +400,8 @@ export function Chart({
         })}
         <text
           className="axis-title"
-          transform={`rotate(90 ${plotRight + 62} ${(plotTop + plotBottom) / 2})`}
-          x={plotRight + 62}
+          transform={`rotate(90 ${plotRight + 42} ${(plotTop + plotBottom) / 2})`}
+          x={plotRight + 42}
           y={(plotTop + plotBottom) / 2}
           textAnchor="middle"
         >

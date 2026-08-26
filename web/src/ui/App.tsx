@@ -32,6 +32,7 @@ import { EducationPanel } from './EducationPanel.js';
 import { WalkthroughPanel } from './WalkthroughPanel.js';
 import { EducationContext } from './Tooltip.js';
 import { Icon } from '../icons/Icon.js';
+import { useTheme, type ThemeChoice } from './theme.js';
 import { runCheck, WALKTHROUGH } from '../education/index.js';
 import { ExportPanel } from './ExportPanel.js';
 import { AboutPanel } from './AboutPanel.js';
@@ -142,21 +143,15 @@ export function App(): React.JSX.Element {
   const chartRef = useRef<SVGSVGElement | null>(null);
 
   /**
-   * Whether the page is in its dark theme.
+   * Light or dark, and who chose it.
    *
-   * The canvas layer paints raw colours rather than CSS variables — a canvas
-   * cannot resolve `var(--…)` — so it has to be told which palette applies, and
-   * kept in step when the system preference changes underneath it.
+   * `resolved` is what the interface is actually painting. The canvas layer
+   * needs it as a boolean because a canvas cannot read `var(--…)` — it has to
+   * be told which palette applies, and kept in step both when the user presses
+   * the toggle and when the system preference changes underneath an unset one.
    */
-  const [dark, setDark] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
-  );
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-color-scheme: dark)');
-    const update = (): void => setDark(query.matches);
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
+  const theme = useTheme();
+  const dark = theme.resolved === 'dark';
 
   const [sizeRef, size] = useElementSize();
   const limits = useMemo(() => domainLimits(units), [units]);
@@ -507,18 +502,40 @@ export function App(): React.JSX.Element {
             <span className="brand-tagline">{BRAND.tagline}</span>
           </div>
         </div>
-        <div className="unit-toggle" role="group" aria-label="Unit system">
-          {(['IP', 'SI'] as UnitSystem[]).map((system) => (
-            <button
-              key={system}
-              type="button"
-              className={units === system ? 'active' : ''}
-              onClick={() => switchUnits(system)}
-              aria-pressed={units === system}
-            >
-              {system}
-            </button>
-          ))}
+        <div className="header-toggles">
+          <div className="unit-toggle" role="group" aria-label="Unit system">
+            {(['IP', 'SI'] as UnitSystem[]).map((system) => (
+              <button
+                key={system}
+                type="button"
+                className={units === system ? 'active' : ''}
+                onClick={() => switchUnits(system)}
+                aria-pressed={units === system}
+              >
+                {system}
+              </button>
+            ))}
+          </div>
+
+          {/* Two buttons for three states: no stored preference follows the
+              operating system, and pressing either pins it. See ui/theme.ts. */}
+          <div className="unit-toggle theme-toggle" role="group" aria-label="Appearance">
+            {([
+              { choice: 'light' as ThemeChoice, icon: 'sun', label: 'Light' },
+              { choice: 'dark' as ThemeChoice, icon: 'moon', label: 'Dark' },
+            ]).map(({ choice, icon, label }) => (
+              <button
+                key={choice}
+                type="button"
+                className={theme.resolved === choice ? 'active' : ''}
+                onClick={() => theme.setPreference(choice)}
+                aria-pressed={theme.resolved === choice}
+                title={`${label} appearance`}
+              >
+                <Icon name={icon} size={17} title={`${label} appearance`} />
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

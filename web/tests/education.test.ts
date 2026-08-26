@@ -73,8 +73,19 @@ describe('content coverage', () => {
       expect(EQUIPMENT[type], `no education entry for ${type}`).toBeDefined();
       expect(EQUIPMENT[type]!.text.length).toBeGreaterThan(80);
       expect(EQUIPMENT[type]!.check.length).toBeGreaterThan(60);
-      expect(EQUIPMENT[type]!.moves.length).toBeGreaterThan(0);
     }
+  });
+
+  it('says what every *process* moves', () => {
+    // A source is a declared state, not a process: there is no entering
+    // condition to compare against, so it has nothing to move and the panel
+    // omits the section entirely. Everything that acts on air must describe
+    // what it does to it.
+    for (const type of AVAILABLE_STAGE_TYPES) {
+      if (type === 'source') continue;
+      expect(EQUIPMENT[type]!.moves.length, `${type} describes no movement`).toBeGreaterThan(0);
+    }
+    expect(EQUIPMENT.source.moves).toEqual([]);
   });
 
   it('resolves every see-also cross-reference', () => {

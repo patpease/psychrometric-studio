@@ -307,18 +307,24 @@ export function defaultTicks(units: UnitSystem): FamilyTicks {
   if (units === 'IP') {
     return {
       relativeHumidity: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-      wetBulb: range(30, 90, 5),
-      enthalpy: range(15, 60, 5), // Btu/lb
-      specificVolume: range(12.5, 15.5, 0.5), // ft³/lb
-      dewPoint: range(35, 85, 5),
+      // These ranges cover the default view and a little beyond it. They were
+      // sized for a chart starting at 32 °F; a chart that now starts at 5 °F
+      // needs them extended, or the cold third of it is empty of everything but
+      // relative humidity — which looks like a rendering fault rather than a
+      // choice. Lines outside the view are clipped away, so an over-generous
+      // range costs a few discarded traces and nothing else.
+      wetBulb: range(0, 90, 5),
+      enthalpy: range(0, 60, 5), // Btu/lb
+      specificVolume: range(11.5, 15.5, 0.5), // ft³/lb
+      dewPoint: range(0, 85, 5),
     };
   }
   return {
     relativeHumidity: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-    wetBulb: range(0, 35, 5),
-    // Canonical SI enthalpy is J/kg; these are 0–120 kJ/kg at 10 kJ/kg spacing.
-    enthalpy: range(0, 120, 10).map((kJ) => kJ * 1000),
-    specificVolume: range(0.76, 0.96, 0.02), // m³/kg
-    dewPoint: range(0, 30, 5),
+    wetBulb: range(-15, 40, 5),
+    // Canonical SI enthalpy is J/kg; these are −20–120 kJ/kg at 10 kJ/kg spacing.
+    enthalpy: range(-20, 120, 10).map((kJ) => kJ * 1000),
+    specificVolume: range(0.72, 0.96, 0.02), // m³/kg
+    dewPoint: range(-15, 30, 5),
   };
 }

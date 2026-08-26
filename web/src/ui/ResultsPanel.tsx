@@ -82,12 +82,25 @@ export function ResultsPanel({
                 </tr>
               ))}
             </tbody>
+            {/*
+              Units belong under the column they qualify, not in a sentence
+              beside the table. As a paragraph outside the scroll container they
+              sat against the left edge — under the stage names, which have no
+              unit — and did not move when the table scrolled. In the foot they
+              line up with both the data and the headings above them.
+            */}
+            <tfoot>
+              <tr>
+                <th scope="row" />
+                <td>{LABELS[units].temperature}</td>
+                <td>{LABELS[units].temperature}</td>
+                <td>{LABELS[units].relativeHumidity}</td>
+                <td>{LABELS[units].humidityRatio}</td>
+                <td>{LABELS[units].enthalpy}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
-        <p className="table-units">
-          {LABELS[units].temperature} · % · {LABELS[units].humidityRatio} ·{' '}
-          {LABELS[units].enthalpy}
-        </p>
       </section>
 
       <section>

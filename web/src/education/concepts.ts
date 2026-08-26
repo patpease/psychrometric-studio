@@ -46,11 +46,14 @@ const entries: ConceptEntry[] = [
     summary: 'The mass of water vapour carried per unit mass of dry air — the chart’s vertical axis.',
     icon: 'process-humidification',
     text:
-      'Written W, in lb of water per lb of dry air, or kg per kg. It is an ' +
-      'absolute measure: unlike relative humidity it does not change when the ' +
-      'air is heated or cooled, only when moisture is genuinely added or ' +
-      'removed. That is what makes it the right vertical axis — a horizontal ' +
-      'line on this chart means "no moisture crossed a boundary".',
+      'Written W. It is a ratio of masses, so it is dimensionless — but the ' +
+      'numbers are inconveniently small, and charts show it scaled: this one ' +
+      'reads in grains of water per pound of dry air (7,000 grains to the ' +
+      'pound) in IP, and grams per kilogram in SI. It is an absolute measure: ' +
+      'unlike relative humidity it does not change when the air is heated or ' +
+      'cooled, only when moisture is genuinely added or removed. That is what ' +
+      'makes it the right vertical axis — a horizontal line on this chart means ' +
+      '"no moisture crossed a boundary".',
     practice:
       'Latent loads are moisture flows, so they are naturally expressed as a ' +
       'change in W times the dry-air mass flow. Working in W rather than RH is ' +
