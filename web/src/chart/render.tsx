@@ -8,7 +8,7 @@
  * emitting SVG directly means vector export in Phase 7 is a DOM serialisation
  * rather than a second rendering path.
  */
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useId, useMemo, useRef } from 'react';
 import type { ChartDomain, ChartScales, DataPoint } from './scales.js';
 import { createScales, niceTicks } from './scales.js';
 import {
@@ -246,6 +246,25 @@ function ChartView({
   exportRef,
 }: ChartProps): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  /**
+   * Ids for this chart's own `<defs>`, unique to the instance.
+   *
+   * Two charts are mounted so the page can turn between operating cases, and a
+   * document with two `id="plot-clip"` elements resolves every `url(#plot-clip)`
+   * to the first one — so both charts would clip against a rectangle belonging
+   * to the other. That was survivable while the two clips were identical
+   * rectangles and stopped being survivable the moment one face was hidden: a
+   * `clipPath` child that is not visible contributes nothing to the clip, and
+   * both charts lost everything inside the plot while their axes carried on
+   * drawing.
+   *
+   * The colons React puts in a generated id are legal in markup but awkward
+   * everywhere else, so they come out.
+   */
+  const uid = useId().replace(/:/g, '');
+  const clipId = `plot-clip-${uid}`;
+  const arrowId = `process-arrow-${uid}`;
+
   const scales = useMemo(() => createScales(domain, width, height), [domain, width, height]);
 
   /**
@@ -322,10 +341,10 @@ function ChartView({
       <defs>
         {/* Everything inside the plot is clipped, so a family that runs past the
             frame is cut at the frame rather than drawn over the axes. */}
-        <clipPath id="plot-clip">
+        <clipPath id={clipId}>
           <rect x={plotLeft} y={plotTop} width={scales.plotWidth} height={scales.plotHeight} />
         </clipPath>
-        <ProcessArrowMarker />
+        <ProcessArrowMarker id={arrowId} />
       </defs>
 
       <rect
@@ -336,7 +355,7 @@ function ChartView({
         className="plot-background"
       />
 
-      <g clipPath="url(#plot-clip)">
+      <g clipPath={`url(#${clipId})`}>
         {/* Comfort zones sit behind everything: they are context for the
             chart, not a layer over it. */}
         {comfortZones && comfortZones.length > 0 && (
@@ -379,6 +398,7 @@ function ChartView({
             solved={solved}
             scales={scales}
             pressure={pressure}
+            arrowId={arrowId}
             selected={selectedStage}
             onSelect={onSelectStage ?? (() => undefined)}
             onDragState={onDragState}

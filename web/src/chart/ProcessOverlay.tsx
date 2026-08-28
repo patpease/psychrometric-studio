@@ -23,6 +23,8 @@ export interface ProcessOverlayProps {
   solved: SolvedAirstream;
   scales: ChartScales;
   pressure: number;
+  /** The arrowhead marker in this chart's own defs. See `ProcessArrowMarker`. */
+  arrowId: string;
   /** Index of the selected stage, or null. */
   selected: number | null;
   onSelect: (index: number | null) => void;
@@ -78,6 +80,7 @@ export function ProcessOverlay({
   solved,
   scales,
   pressure,
+  arrowId,
   selected,
   onSelect,
   onDragState,
@@ -115,7 +118,7 @@ export function ProcessOverlay({
             key={`line-${stage.stage.id}`}
             className={`process-line${isSelected ? ' selected' : ''}`}
             points={path.map(toPixels).join(' ')}
-            markerEnd="url(#process-arrow)"
+            markerEnd={`url(#${arrowId})`}
           />
         );
       })}
@@ -233,11 +236,17 @@ export function ProcessOverlay({
   );
 }
 
-/** Arrowhead marker, defined once in the chart's `<defs>`. */
-export function ProcessArrowMarker(): React.JSX.Element {
+/**
+ * Arrowhead marker, defined once per chart.
+ *
+ * The id is passed in rather than fixed, because more than one chart can be
+ * mounted at a time and a duplicate id sends every reference to whichever copy
+ * the document happens to hold first.
+ */
+export function ProcessArrowMarker({ id }: { id: string }): React.JSX.Element {
   return (
     <marker
-      id="process-arrow"
+      id={id}
       viewBox="0 0 10 10"
       refX="9"
       refY="5"

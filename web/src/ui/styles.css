@@ -2311,10 +2311,19 @@ body {
  * the sheet itself has genuinely turned over.
  */
 .chart-sheet {
+  /* One definition of how long a turn takes. The face swap below happens at
+     exactly half of it, and the two must not drift apart. */
+  --turn: 0.55s;
+  --turn-half: 0.275s;
+
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
-  transition: transform 0.55s cubic-bezier(0.42, 0.05, 0.25, 1);
+  /* Older Safari does not apply the unprefixed form, and without it the faces
+     flatten into one plane — which is precisely the state in which both charts
+     paint at once. */
+  -webkit-transform-style: preserve-3d;
+  transition: transform var(--turn) cubic-bezier(0.42, 0.05, 0.25, 1);
 }
 
 /* Perspective belongs to the container the sheet turns inside, not the sheet:
@@ -2328,12 +2337,35 @@ body {
   transform: rotateY(-180deg);
 }
 
+/**
+ * Which face is painted, said twice.
+ *
+ * `backface-visibility` is the natural way to express "you cannot see the back
+ * of a page", and it is kept. It cannot be the only thing expressing it. When
+ * an engine declines to cull — an older Safari that never applied
+ * `transform-style`, a machine with GPU rasterisation off — the result is not a
+ * slightly wrong animation, it is both charts drawn on top of each other and a
+ * chart that cannot be read. A guarantee that important should not rest on a
+ * property with compositing preconditions.
+ *
+ * So visibility says it a second way, with no preconditions at all. The swap is
+ * delayed to the half-way point of the turn, where the sheet is edge-on and
+ * neither face is legible: invisible as a transition, and absolute as a
+ * guarantee that the two are never painted in the same frame.
+ */
 .chart-face {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
   /* Safari still wants the prefixed form to hide a turned-away face. */
   -webkit-backface-visibility: hidden;
+
+  visibility: hidden;
+  transition: visibility 0s linear var(--turn-half);
+}
+
+.chart-face.live {
+  visibility: visible;
 }
 
 .chart-face + .chart-face {
@@ -2364,6 +2396,12 @@ body {
  */
 @media (prefers-reduced-motion: reduce) {
   .chart-sheet {
+    transition: none;
+  }
+
+  /* With no rotation to hide behind, the swap happens at once rather than
+     half a turn later — otherwise the chart would go blank for 275ms. */
+  .chart-face {
     transition: none;
   }
 }

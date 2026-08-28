@@ -121,3 +121,36 @@ describe('the page turn respects a request for less motion', () => {
     expect(block).not.toMatch(/opacity:\s*0/);
   });
 });
+
+describe('only one chart face is ever painted', () => {
+  /**
+   * The turn hides the far face twice over, and the second way is the one that
+   * matters. `backface-visibility` needs the engine to be culling backfaces at
+   * all; where it is not — an older Safari that never applied `transform-style`,
+   * a machine without GPU rasterisation — both charts paint on top of each
+   * other and the chart cannot be read. That is a catastrophic failure from a
+   * property with preconditions, so it is not allowed to be the only guard.
+   */
+  it('hides the far face with more than backface culling', () => {
+    const face = css.match(/\n\.chart-face \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(face, 'no .chart-face rule found').not.toBe('');
+    expect(face).toMatch(/backface-visibility:\s*hidden/);
+    expect(face, 'backface-visibility is the only thing hiding the far face').toMatch(
+      /visibility:\s*hidden/,
+    );
+  });
+
+  it('shows the near face', () => {
+    expect(css).toMatch(/\.chart-face\.live \{\s*visibility:\s*visible;\s*\}/);
+  });
+
+  it('swaps the faces half way through the turn, not at either end', () => {
+    // At the ends one face is square to the reader and the swap would be seen.
+    // Half a turn in, the sheet is edge-on and neither face is legible.
+    const sheet = css.match(/\n\.chart-sheet \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const turn = sheet.match(/--turn:\s*([\d.]+)s/)?.[1];
+    const half = sheet.match(/--turn-half:\s*([\d.]+)s/)?.[1];
+    expect(turn, 'the turn has no declared duration').toBeDefined();
+    expect(Number(half)).toBeCloseTo(Number(turn) / 2, 3);
+  });
+});
