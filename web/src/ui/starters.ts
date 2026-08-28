@@ -40,10 +40,17 @@ export const STARTER_COOLING: Stage[] = [
  * its own humidity on the moisture its occupants give off. It settles near
  * 29% RH, which is the winter dryness people actually complain about.
  *
- * The room's sensible load is negative because in winter the space *loses*
- * heat and the supply air is what makes it up. The loads are derived rather
- * than chosen: they are whatever returns the air to the condition the mixing
- * box declares. See `tests/starter.test.ts`.
+ * The coil leaves at 75 °F, so most of its 51 MBH goes on warming outdoor air
+ * back to room temperature rather than on the space: the supply air is only a
+ * few degrees above the room, and the envelope loss it covers is correspondingly
+ * small. That is a tight, internally-loaded building, and worth reading off the
+ * chart — the gap between the mixed point and the coil's leaving point is the
+ * ventilation penalty, drawn to scale.
+ *
+ * The room's sensible load is negative because in winter the space *loses* heat
+ * and the supply air is what makes it up. The loads are derived rather than
+ * chosen: they are whatever returns the air to the condition the mixing box
+ * declares. See `tests/starter.test.ts`.
  */
 export const STARTER_HEATING: Stage[] = [
   { id: 'oa', type: 'source', name: 'Outdoor air', airflow: 500, params: { tdb: 5, rh: 0.6 } },
@@ -53,7 +60,7 @@ export const STARTER_HEATING: Stage[] = [
     name: 'Mixing box',
     params: { airflow2: 1500, tdb2: 70, rh2: 0.294 },
   },
-  { id: 'hc', type: 'heating', name: 'Heating coil', params: { tdbOut: 92 } },
+  { id: 'hc', type: 'heating', name: 'Heating coil', params: { tdbOut: 75 } },
   { id: 'sf', type: 'fan', name: 'Supply fan', params: { power: 1.5, motorInAirstream: true } },
-  { id: 'rm', type: 'room', name: 'Zone', params: { sensible: -53, latent: 11 } },
+  { id: 'rm', type: 'room', name: 'Zone', params: { sensible: -15, latent: 11 } },
 ];
