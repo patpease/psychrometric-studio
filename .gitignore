@@ -12,3 +12,6 @@ dist/
 
 # Editable-install metadata, created by pip.
 *.egg-info/
+
+# Wrangler local state.
+.wrangler/

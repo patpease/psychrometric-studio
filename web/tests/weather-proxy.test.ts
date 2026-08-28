@@ -12,6 +12,7 @@ import {
   MAX_ARCHIVE_BYTES,
   archiveNameFrom,
   isUrlProblem,
+  isArchiveResponse,
   relayWeatherArchive,
   validateWeatherUrl,
 } from '../src/weather/proxy.js';
@@ -139,5 +140,28 @@ describe('naming the downloaded archive', () => {
 
   it('falls back when there is nothing to take', () => {
     expect(archiveNameFrom('nonsense')).toBe('weather.zip');
+  });
+});
+
+describe('telling a relay answer from the application shell', () => {
+  it('accepts a zip', () => {
+    expect(isArchiveResponse('application/zip')).toBe(true);
+    expect(isArchiveResponse('application/octet-stream')).toBe(true);
+  });
+
+  it('rejects HTML, whatever the status code said', () => {
+    // A single-page deployment answers 200 with index.html for any path it does
+    // not know — so a relay that was never deployed looks like success. This is
+    // the check that turns "this .zip could not be opened" into something true.
+    expect(isArchiveResponse('text/html')).toBe(false);
+    expect(isArchiveResponse('text/html; charset=utf-8')).toBe(false);
+    expect(isArchiveResponse('TEXT/HTML')).toBe(false);
+  });
+
+  it('does not treat a missing content-type as failure', () => {
+    // Absence of a declaration is not evidence against the archive, and
+    // refusing on it would break a correct relay that omitted the header.
+    expect(isArchiveResponse(null)).toBe(true);
+    expect(isArchiveResponse('')).toBe(true);
   });
 });

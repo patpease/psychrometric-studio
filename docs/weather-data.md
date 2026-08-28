@@ -110,8 +110,8 @@ fetch fails outright and a `no-cors` request returns an opaque body that cannot
 be read — which is worse than an error, because it looks like success. Verified
 twice, in Phase 5 and again when this was built.
 
-The request therefore goes through `/api/weather`, a Cloudflare Pages Function
-on the site's own origin. It fetches from **one host only**; an endpoint that
+The request therefore goes through `/api/weather`, a Cloudflare Worker route on
+the site's own origin. It fetches from **one host only**; an endpoint that
 relays whatever URL it is handed is an open proxy, and the domain carries the
 traffic. Once the bytes arrive, the path rejoins the dropped-file one — unzipped
 and parsed in the browser — so "the file is not stored" stays true whichever way

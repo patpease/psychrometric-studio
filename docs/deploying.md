@@ -15,17 +15,31 @@ its absence and hides the one button that needs it.
 
 ---
 
-## The front end — Cloudflare Pages
+## The front end — Cloudflare Workers
+
+Deployed through **Workers Builds**, not Pages. The two are different products
+and the difference is not cosmetic: Pages resolves a `functions/` directory into
+routes, and Workers does not. A `functions/` directory here is silently ignored,
+and because static assets fall back to `index.html`, a route that was never
+deployed answers **200 with the application shell** rather than 404. That is how
+the weather relay came to look deployed when it was not.
+
+Under Workers the routing is explicit instead: `worker/index.ts` owns every
+request, handles `/api/weather`, and hands everything else to the assets
+binding. `wrangler.jsonc` is what ties them together — **without its `main`
+entry there is no script at all**, and every path goes straight to the assets.
 
 ### Project settings
 
 | Setting | Value |
 |---|---|
-| Framework preset | None |
 | Root directory | `web` |
 | Build command | `npm run build` |
-| Build output directory | `dist` |
+| Deploy command | `npx wrangler deploy` |
 | Node version | 22 (set `NODE_VERSION=22` in the environment) |
+
+The output directory is declared in `wrangler.jsonc` (`assets.directory`), not
+in the dashboard.
 
 **The root directory is the setting that actually matters**, and on the project
 creation screen it is collapsed behind an *Advanced* disclosure that is easy to
@@ -73,28 +87,39 @@ entirely and does not offer PDF export.
 
 ### The weather relay
 
-`web/functions/api/weather.ts` deploys automatically with the site — Pages picks
-up a `functions` directory relative to the **root directory**, which is why it
-lives under `web/` rather than at the repository root. No configuration, no
-separate service, no environment variable.
+`web/worker/index.ts`, reached at `/api/weather`. It fetches from exactly one
+host, and that allowlist is the whole security model: an endpoint that fetches
+whatever URL it is handed is an open proxy, and your domain carries the traffic.
 
-It will fetch from exactly one host, and that allowlist is the whole security
-model: an endpoint that fetches whatever URL it is handed is an open proxy, and
-your domain carries the traffic. The checks live in `src/weather/proxy.ts`,
-which the Vite dev server also serves in development — so the logic that runs at
-the edge is the logic exercised locally, and the Function itself is a dozen
-lines of adapter.
+The checks live in `src/weather/proxy.ts`, which the Vite dev server also serves
+in development — so the logic running at the edge is the logic exercised
+locally, and the Worker is an adapter with no decisions in it.
 
-**Verify it after the first deploy.** It is the one part of the system that
-cannot be exercised on a developer's machine without Wrangler:
+**Run it locally before deploying.** Wrangler is a devDependency, so this needs
+no setup and exercises the real Workers runtime rather than a stand-in:
+
+```bash
+npm run preview:worker
+```
+
+That serves the built site and the relay together on port 8788 — the production
+shape. It was added after a deployment shipped a relay that had never run
+anywhere.
+
+**And verify after deploying:**
 
 ```bash
 curl -sI "https://YOUR-SITE.pages.dev/api/weather?url=https://climate.onebuilding.org/WMO_Region_4_North_and_Central_America/ABW_Aruba/ABW_AA_Queen.Beatrix.Intl.AP.789820_TMYx.2009-2023.zip" | head -3
 ```
 
-`200` with `content-type: application/zip` means it is live. A `404` means Pages
-did not find the `functions` directory — check the root directory setting. The
-interface says so plainly in that case rather than blaming the network.
+`200` with `content-type: application/zip` means it is live.
+
+**`200` with `content-type: text/html` means it is not** — the request fell
+through to the application shell, so the Worker either has no `main` entry or
+was not deployed. That is the failure this endpoint actually had, and it is why
+the interface checks the content type rather than the status code: a 200 that
+is secretly HTML would otherwise reach the unzipper and be reported as a corrupt
+archive.
 
 ### Headers
 

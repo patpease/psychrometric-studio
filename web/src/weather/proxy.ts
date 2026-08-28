@@ -171,3 +171,37 @@ export function archiveNameFrom(raw: string): string {
     return 'weather.zip';
   }
 }
+
+/* -------------------------------------------------------------------------- *
+ * Reading the relay's answer, on the client
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Shown when the request reached the site instead of the relay.
+ *
+ * The distinction matters to whoever reads it: nothing is wrong with the
+ * archive or the network, and the drag-and-drop path still works.
+ */
+export const RELAY_NOT_DEPLOYED =
+  'This deployment cannot fetch by link — the request reached the site rather ' +
+  'than the fetch service. Download the archive and drop it in instead; ' +
+  'everything else works normally.';
+
+/**
+ * Did a 200 response actually come from the relay?
+ *
+ * **A status code is not enough.** A single-page deployment serves index.html
+ * for any path it does not recognise, so a *missing* relay answers 200 with
+ * HTML rather than 404. Handing that to the unzipper produces "this .zip could
+ * not be opened", which blames the archive for a deployment fault and sends
+ * whoever reads it looking in the wrong place.
+ *
+ * Observed on a live Workers deployment, where a Pages-style `functions/`
+ * directory is silently ignored and every unknown path falls through to the
+ * application shell.
+ */
+export function isArchiveResponse(contentType: string | null): boolean {
+  const type = (contentType ?? '').toLowerCase();
+  if (!type) return true; // No declaration is not evidence against it.
+  return !type.includes('text/html') && !type.includes('application/xhtml');
+}

@@ -65,11 +65,14 @@ New to the codebase? Read [CLAUDE.md](CLAUDE.md) — it is the orientation.
 
 ## Deploying
 
-A static site on Cloudflare Pages: root directory `web`, build `npm run build`,
-output directory `dist`. One Pages Function ships with it — `/api/weather`,
-which relays weather archives from Climate.OneBuilding because that host sends
-no CORS header. It needs no configuration but is worth checking after the first
-deploy. Leave `VITE_API_URL` unset and the tool ships without the PDF
+Cloudflare Workers, via Workers Builds: root directory `web`, build
+`npm run build`, deploy `npx wrangler deploy`. `wrangler.jsonc` declares the
+static assets and the Worker entry point.
+
+One route is server-side: `/api/weather`, which relays weather archives from
+Climate.OneBuilding because that host sends no CORS header. Run the production
+shape locally with `npm run preview:worker` before deploying — it serves the
+built site and the relay together in the real Workers runtime. Leave `VITE_API_URL` unset and the tool ships without the PDF
 report, which is the v1 configuration. Full instructions, the content security
 policy, and what changes when you add the report service are in
 [docs/deploying.md](docs/deploying.md).

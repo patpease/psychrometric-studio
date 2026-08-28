@@ -1,0 +1,24 @@
+{
+  // Cloudflare Workers, with the built site as static assets.
+  //
+  // `main` is what makes the weather relay reachable: without a script, every
+  // request is served straight from `assets` and an unknown path falls through
+  // to index.html — which is why /api/weather previously answered 200 with the
+  // application shell instead of a zip.
+  //
+  // `not_found_handling` keeps that fallback for genuine navigation, which the
+  // application relies on. The Worker runs first and intercepts /api/weather
+  // before the fallback can see it.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "psychrometric-studio",
+  "compatibility_date": "2026-08-01",
+  "main": "worker/index.ts",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

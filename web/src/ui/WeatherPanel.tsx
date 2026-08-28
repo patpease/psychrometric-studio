@@ -22,7 +22,12 @@ import {
 import { densityLegend, type WeatherMode } from '../chart/WeatherLayer.js';
 import type { ComfortZone } from '../comfort/polygon.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
-import { RELAY_PATH, archiveNameFrom } from '../weather/proxy.js';
+import {
+  RELAY_PATH,
+  RELAY_NOT_DEPLOYED,
+  archiveNameFrom,
+  isArchiveResponse,
+} from '../weather/proxy.js';
 import type { DesignDayKind } from '../weather/ddy.js';
 import { formatTemperature } from './format.js';
 
@@ -85,15 +90,22 @@ export function WeatherPanel({
 
       if (!response.ok) {
         const detail = (await response.json().catch(() => null)) as { message?: string } | null;
-        setUrlProblem(
-          detail?.message ??
-            // A 404 from the site itself rather than from the relay means the
-            // relay is not deployed — worth saying plainly, because the fix is
-            // a deployment setting rather than anything the user did.
-            (response.status === 404
-              ? 'The fetch service is not available on this deployment. Download the file and drop it in.'
-              : `The file could not be fetched (${response.status}).`),
-        );
+        setUrlProblem(detail?.message ?? `The file could not be fetched (${response.status}).`);
+        return;
+      }
+
+      /*
+       * A 200 is not proof the relay answered.
+       *
+       * A single-page deployment serves index.html for any path it does not
+       * recognise, so a *missing* relay replies 200 with HTML rather than 404.
+       * Trusting the status code hands that HTML to the unzipper, which fails
+       * with "this .zip could not be opened" — blaming the archive for a
+       * deployment problem, and sending whoever reads it looking in exactly the
+       * wrong place. Observed on a live deployment, not imagined.
+       */
+      if (!isArchiveResponse(response.headers.get('content-type'))) {
+        setUrlProblem(RELAY_NOT_DEPLOYED);
         return;
       }
 
