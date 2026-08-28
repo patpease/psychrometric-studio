@@ -570,6 +570,7 @@ export function App(): React.JSX.Element {
             onSelect={selectStage}
             onChange={setStages}
             advisories={advisories}
+            designDays={weather.file?.design?.days ?? []}
           />
 
           {/* The education section sits below the system, and its header
@@ -619,6 +620,9 @@ export function App(): React.JSX.Element {
             onSelectStage={selectStage}
             onDragState={dragSource}
             comfortZones={zones}
+            designDays={weather.file?.design?.days ?? []}
+            selectedDesignDay={weather.selectedDesignDay}
+            onSelectDesignDay={(kind) => setWeather((current) => ({ ...current, selectedDesignDay: kind }))}
             exportRef={chartRef}
           />
           <p className="chart-hint">Scroll to zoom · drag to pan</p>

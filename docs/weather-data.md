@@ -101,3 +101,60 @@ dehumidification when what is needed is cooling.
 at that count SVG pans visibly badly. Binning the full year takes about 6 ms,
 comfortably inside a frame, so the density map recomputes on every zoom rather
 than being scaled.
+
+## Design conditions
+
+A Climate.OneBuilding archive contains a `.ddy` beside the `.epw`, and for
+sizing work it is the more consequential of the two. The EPW is a *typical*
+year — what the weather usually does. The DDY carries the ASHRAE design
+conditions: the rare hours plant is actually sized against.
+
+Dropping in the `.zip` reads both. Four conditions are extracted:
+
+| Tag | Shown as | ASHRAE condition |
+|---|---|---|
+| HD | Heating design | Annual heating 99.6%, DB |
+| CD | Cooling design | Annual cooling 0.4%, DB with mean coincident WB |
+| DD | Dehumidification design | Annual cooling 0.4%, DP with mean coincident DB |
+| ED | Enthalpy design | Annual cooling 0.4%, enthalpy with mean coincident DB |
+
+DD and ED are there because **peak dry bulb and peak moisture do not coincide**.
+A coil selected only against CD can be short on latent capacity; that is the
+whole reason ASHRAE publishes the other two, and plotting all four together
+makes the gap between them visible rather than a table lookup.
+
+Each appears on the chart as a diamond with its tag — deliberately not the
+numbered circle a process stage gets, because a design condition is something
+the weather imposes rather than something the system does. Selecting one in the
+panel highlights it on the chart, and the reverse.
+
+### Two things the parser is careful about
+
+**Fields are read by their `!-` comment, not by position.** Positional parsing
+is the usual approach and it is brittle — EnergyPlus has changed the design-day
+object's field list across versions, and the comment is what actually names a
+value.
+
+**The humidity field is reused.** `Wetbulb at Maximum Dry-Bulb` holds a wet bulb
+*or* a dew point depending on the condition type declared two fields earlier,
+and the enthalpy case puts its value elsewhere entirely. Reading the type first
+is the only way to know what the number means — and the dehumidification day is
+precisely the one where it is a dew point, so getting it wrong would misplot the
+condition that was worth surfacing.
+
+The four names are matched specifically rather than loosely. A DDY also contains
+`Ann Htg Wind 99.6% Condns WS=>MCDB`, which a relaxed match on "Htg 99.6%" would
+take as the heating design day and report a wind speed as a temperature.
+
+### Using one for the entering condition
+
+When a weather file is loaded, a source stage offers the four as a **Design
+condition** selector. Choosing one fills in dry bulb and relative humidity, and
+everything downstream re-solves. It is optional — with no file loaded, or with
+"Entered manually" chosen, the stage behaves exactly as it always has.
+
+The values are written into the stage rather than linked to it, so they stay
+editable. Edit one and the selector returns to "Entered manually", because the
+stage is no longer sitting on that condition and saying otherwise would be a
+lie. Removing the weather file leaves the numbers in place: the design day was a
+way of *entering* them, not a dependency.

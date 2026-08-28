@@ -24,6 +24,8 @@ import { LABELS } from '../psych/units.js';
 import { Icon } from '../icons/Icon.js';
 import { iconForStage } from '../icons/map.js';
 import { InfoTip } from './Tooltip.js';
+import type { DesignDay } from '../weather/ddy.js';
+import { formatTemperature } from './format.js';
 
 /**
  * Which concept a parameter field explains.
@@ -72,6 +74,45 @@ export interface ChainEditorProps {
    * the chain's business, not the editor's.
    */
   advisories?: readonly (string | null)[];
+  /**
+   * ASHRAE design conditions from a loaded weather archive.
+   *
+   * Offered on source stages only, and only when a file is loaded. With no
+   * weather the entering condition is typed, exactly as before — the design
+   * days are an accelerator, never a requirement.
+   */
+  designDays?: readonly DesignDay[];
+}
+
+/**
+ * Apply a design condition to a source stage.
+ *
+ * Writes dry bulb and relative humidity, which is how a source stores its
+ * state, so everything downstream re-solves from the same declared intent it
+ * would have had if the numbers were typed. Nothing about the stage becomes
+ * special: the fields stay editable, and editing one simply means it no longer
+ * matches the design day.
+ */
+function applyDesignDay(stage: Stage, day: DesignDay): Stage {
+  return {
+    ...stage,
+    params: {
+      ...(stage.params ?? {}),
+      tdb: Number(day.state.tdb.toFixed(2)),
+      rh: Number(day.state.rh.toFixed(4)),
+    },
+  };
+}
+
+/** Is this stage currently sitting on that design condition? */
+function matchesDesignDay(stage: Stage, day: DesignDay): boolean {
+  const params = stage.params ?? {};
+  return (
+    typeof params['tdb'] === 'number' &&
+    typeof params['rh'] === 'number' &&
+    Math.abs(params['tdb'] - day.state.tdb) < 0.05 &&
+    Math.abs(params['rh'] - day.state.rh) < 0.005
+  );
 }
 
 function newStage(type: StageType, index: number): Stage {
@@ -208,6 +249,7 @@ export function ChainEditor({
   onSelect,
   onChange,
   advisories = [],
+  designDays = [],
 }: ChainEditorProps): React.JSX.Element {
   const update = (index: number, next: Stage): void => {
     const copy = [...stages];
@@ -327,6 +369,37 @@ export function ChainEditor({
                       }}
                     />
                   </div>
+
+                  {/*
+                    Design conditions, on source stages only. Deliberately a
+                    plain select that writes values rather than a mode the
+                    stage remembers: the entering condition stays one thing —
+                    a declared state — however it got there.
+                  */}
+                  {stage.type === 'source' && designDays.length > 0 && (
+                    <div className="field design-day-field">
+                      <label htmlFor={`${stage.id}-design-day`}>
+                        Design condition
+                        <InfoTip text="ASHRAE design conditions from the weather archive. Optional — choosing one fills in dry bulb and relative humidity below, which stay editable." />
+                      </label>
+                      <select
+                        id={`${stage.id}-design-day`}
+                        value={designDays.find((day) => matchesDesignDay(stage, day))?.kind ?? ''}
+                        onChange={(event) => {
+                          const day = designDays.find((entry) => entry.kind === event.target.value);
+                          if (day) update(index, applyDesignDay(stage, day));
+                        }}
+                      >
+                        <option value="">Entered manually</option>
+                        {designDays.map((day) => (
+                          <option key={day.kind} value={day.kind}>
+                            {day.tag} · {day.label} · {formatTemperature(day.state.tdb, units)} /{' '}
+                            {formatTemperature(day.state.twb, units)} WB
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {meta?.fields.map((field) => (
                     <Field

@@ -56,6 +56,11 @@
   --ok-bg: #E8F6EE;
   --selected-bg: #E9F2EF;
 
+  /* Design conditions are the weather's, not the design's — a different
+     kind of thing from a process point, and marked in a different colour. */
+  --design-day: #6B4FA8;
+  --design-day-ink: #FFFFFF;
+
   /* A design note is advice, not a fault. It gets its own colour so a reader
      can tell at a glance whether the tool is reporting a problem with the
      calculation or offering an opinion about the design. */
@@ -115,6 +120,9 @@
     --ok-bg: #12291F;
     --selected-bg: #1D2A31;
 
+    --design-day: #B18BEA;
+    --design-day-ink: #141A21;
+
     --comfort-winter: rgba(108, 176, 238, 0.16);
     --comfort-winter-line: rgba(108, 176, 238, 0.6);
     --comfort-summer: rgba(240, 163, 85, 0.16);
@@ -171,6 +179,9 @@
   --ok-ink: #7EDCAB;
   --ok-bg: #12291F;
   --selected-bg: #1D2A31;
+
+  --design-day: #B18BEA;
+  --design-day-ink: #141A21;
 
   --comfort-winter: rgba(108, 176, 238, 0.16);
   --comfort-winter-line: rgba(108, 176, 238, 0.6);
@@ -2045,4 +2056,95 @@ body {
   border-top: 1px solid var(--border);
   color: var(--ink-muted);
   font-size: 0.68rem;
+}
+
+/* ------------------------------------------------------------ design days */
+
+.design-day polygon {
+  fill: var(--design-day);
+  stroke: var(--plot-bg);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.design-day.selected polygon {
+  stroke-width: 2.5;
+}
+
+.design-day-tag {
+  fill: var(--design-day);
+  font-size: 9px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--plot-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.design-day.selected .design-day-tag {
+  font-size: 10.5px;
+}
+
+.design-day-list {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+
+.design-day-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin-bottom: 0.25rem;
+  padding: 0.32rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.design-day-row:hover {
+  border-color: var(--design-day);
+}
+
+.design-day-row.selected {
+  border-color: var(--design-day);
+  background: var(--selected-bg);
+}
+
+/* The chip carries the same two letters as the chart marker; it is the whole
+   link between the list and the plot. */
+.design-day-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  flex-shrink: 0;
+  padding: 0.1rem 0;
+  border-radius: 3px;
+  background: var(--design-day);
+  color: var(--design-day-ink);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.design-day-name {
+  flex: 1;
+}
+
+.design-day-values {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.design-day-field select {
+  font-size: 0.7rem;
 }

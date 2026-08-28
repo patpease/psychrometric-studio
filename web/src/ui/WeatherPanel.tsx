@@ -22,12 +22,16 @@ import {
 import { densityLegend, type WeatherMode } from '../chart/WeatherLayer.js';
 import type { ComfortZone } from '../comfort/polygon.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
+import type { DesignDayKind } from '../weather/ddy.js';
+import { formatTemperature } from './format.js';
 
 export interface WeatherState {
   file: EpwFile | null;
   mode: WeatherMode;
   filter: HourFilter;
   presetIndex: number;
+  /** The design condition highlighted on the chart, if any. */
+  selectedDesignDay: DesignDayKind | null;
 }
 
 export const initialWeatherState: WeatherState = {
@@ -35,6 +39,7 @@ export const initialWeatherState: WeatherState = {
   mode: 'off',
   filter: ALL_HOURS,
   presetIndex: 0,
+  selectedDesignDay: null,
 };
 
 export interface WeatherPanelProps {
@@ -138,6 +143,51 @@ export function WeatherPanel({
             <dt>Hours read</dt>
             <dd>{state.file.hours.length.toLocaleString()}</dd>
           </dl>
+
+          {state.file.design && state.file.design.days.length > 0 && (
+            <>
+              <h3>ASHRAE design conditions</h3>
+              <p className="comfort-note">
+                From the <code>.ddy</code> in the archive. These are the rare
+                hours plant is sized against — not the typical year the overlay
+                above draws. Select one to find it on the chart.
+              </p>
+              <ul className="design-day-list">
+                {state.file.design.days.map((day) => {
+                  const isSelected = state.selectedDesignDay === day.kind;
+                  return (
+                    <li key={day.kind}>
+                      <button
+                        type="button"
+                        className={`design-day-row${isSelected ? ' selected' : ''}`}
+                        onClick={() =>
+                          onChange({
+                            ...state,
+                            selectedDesignDay: isSelected ? null : day.kind,
+                          })
+                        }
+                        aria-pressed={isSelected}
+                      >
+                        <span className="design-day-tag-chip">{day.tag}</span>
+                        <span className="design-day-name">{day.label}</span>
+                        <span className="design-day-values">
+                          {formatTemperature(day.state.tdb, units)} DB
+                          {'  ·  '}
+                          {formatTemperature(day.state.twb, units)} WB
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
+          {state.file.design?.problems.map((problem) => (
+            <p key={problem} className="comfort-note">
+              {problem}
+            </p>
+          ))}
 
           <button
             type="button"

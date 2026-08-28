@@ -21,6 +21,7 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { lib } from '../psych/psychrolib.js';
 import { celsiusToFahrenheit, type UnitSystem } from '../psych/units.js';
+import { parseDdy, convertDesignDays, type DesignDayFile } from './ddy.js';
 
 /** One hour of weather, in the application's own unit system. */
 export interface WeatherHour {
@@ -60,6 +61,14 @@ export interface EpwFile {
   readonly problems: readonly string[];
   /** The unit system the hours were converted into. */
   readonly units: UnitSystem;
+  /**
+   * ASHRAE design conditions from the `.ddy` beside the `.epw`, when the
+   * archive carried one.
+   *
+   * `null` for a bare `.epw`, which is a normal and supported way to load
+   * weather — the design days are a bonus from the archive, not a requirement.
+   */
+  readonly design?: DesignDayFile | null;
 }
 
 /**
@@ -264,7 +273,28 @@ export async function readWeatherFile(file: File, units: UnitSystem): Promise<Ep
     };
   }
 
-  return parseEpw(strFromU8(entries[epwName]!), units);
+  const epw = parseEpw(strFromU8(entries[epwName]!), units);
+
+  /*
+   * The design-day file is the more consequential half of the download for
+   * sizing work, and it is already on disk. Its absence is not an error — a
+   * few archives carry only the EPW — so a missing or unreadable `.ddy` costs
+   * the design conditions and nothing else.
+   */
+  const ddyName = Object.keys(entries).find((name) => name.toLowerCase().endsWith('.ddy'));
+  if (!ddyName) return epw;
+
+  try {
+    return { ...epw, design: parseDdy(strFromU8(entries[ddyName]!), units) };
+  } catch {
+    return {
+      ...epw,
+      problems: [
+        ...epw.problems,
+        'The design-day file in this archive could not be read. The hourly data is unaffected.',
+      ],
+    };
+  }
 }
 
 /** A one-line description of where the data came from, for the panel and exports. */
@@ -380,6 +410,7 @@ export function convertHoursTo(file: EpwFile, units: UnitSystem): EpwFile {
   return {
     ...file,
     units,
+    ...(file.design ? { design: convertDesignDays(file.design, units) } : {}),
     location: { ...file.location, elevation: elevation(file.location.elevation) },
     hours: file.hours.map((hour) => ({
       ...hour,

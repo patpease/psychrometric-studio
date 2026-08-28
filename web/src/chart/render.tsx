@@ -27,6 +27,8 @@ import { protractorRays } from './protractor.js';
 import { humidityRatioToDisplay, LABELS, type UnitSystem } from '../psych/units.js';
 import { ProcessOverlay, ProcessArrowMarker } from './ProcessOverlay.js';
 import { ComfortOverlay } from './ComfortOverlay.js';
+import { DesignDayOverlay } from './DesignDayOverlay.js';
+import type { DesignDay, DesignDayKind } from '../weather/ddy.js';
 import type { ComfortZone } from '../comfort/polygon.js';
 import type { SolvedAirstream } from '../processes/chain.js';
 import { formatTemperature, lineLabel } from '../ui/format.js';
@@ -49,6 +51,10 @@ export interface ChartProps {
   onDragState?: ((stageIndex: number, tdb: number, w: number) => void) | undefined;
   /** ASHRAE 55 comfort zones to fill beneath the process chain. */
   comfortZones?: readonly ComfortZone[] | undefined;
+  /** ASHRAE design conditions from a loaded weather archive's `.ddy`. */
+  designDays?: readonly DesignDay[] | undefined;
+  selectedDesignDay?: DesignDayKind | null;
+  onSelectDesignDay?: ((kind: DesignDayKind | null) => void) | undefined;
   /**
    * Receives the live `<svg>` element, for export.
    *
@@ -213,6 +219,9 @@ export function Chart({
   onSelectStage,
   onDragState,
   comfortZones,
+  designDays,
+  selectedDesignDay = null,
+  onSelectDesignDay,
   exportRef,
 }: ChartProps): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -309,6 +318,15 @@ export function Chart({
       <g clipPath="url(#plot-clip)">
         {/* Comfort zones sit behind everything: they are context for the
             chart, not a layer over it. */}
+        {designDays && designDays.length > 0 && (
+          <DesignDayOverlay
+            days={designDays}
+            scales={scales}
+            selected={selectedDesignDay}
+            onSelect={onSelectDesignDay ?? (() => undefined)}
+          />
+        )}
+
         {comfortZones && comfortZones.length > 0 && (
           <ComfortOverlay zones={comfortZones} scales={scales} />
         )}
