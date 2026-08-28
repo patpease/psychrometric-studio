@@ -141,20 +141,44 @@ function fieldsOf(body: string): Map<string, string> {
   return fields;
 }
 
-function read(fields: Map<string, string>, name: string): string | undefined {
-  const wanted = name.toLowerCase();
-  for (const [key, value] of fields) {
-    if (key === wanted || key.startsWith(wanted)) return value;
+/**
+ * First field whose comment matches any of the given names.
+ *
+ * Several are accepted because one field genuinely has several names. The
+ * EnergyPlus dictionary calls it `Wetbulb or DewPoint at Maximum Dry-Bulb`, and
+ * generators write whichever half applies — `Wetbulb at Maximum Dry-Bulb` for a
+ * wet-bulb condition, `Dewpoint at Maximum Dry-Bulb` for a dew-point one.
+ * Reading only the first name loses every dehumidification day, which is the
+ * one condition this feature exists to surface.
+ */
+function read(fields: Map<string, string>, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const wanted = name.toLowerCase();
+    for (const [key, value] of fields) {
+      if (key === wanted || key.startsWith(wanted)) return value;
+    }
   }
   return undefined;
 }
 
-function readNumber(fields: Map<string, string>, name: string): number | undefined {
-  const raw = read(fields, name);
+function readNumber(fields: Map<string, string>, ...names: string[]): number | undefined {
+  const raw = read(fields, ...names);
   if (raw === undefined || raw === '') return undefined;
   const value = Number.parseFloat(raw);
   return Number.isFinite(value) ? value : undefined;
 }
+
+/**
+ * The humidity value field, under any of the names a generator gives it.
+ *
+ * Order matters only in that all three refer to the same field; whichever the
+ * file used is the one that will be present.
+ */
+const HUMIDITY_FIELD = [
+  'dewpoint at maximum dry-bulb',
+  'wetbulb at maximum dry-bulb',
+  'wetbulb or dewpoint at maximum dry-bulb',
+];
 
 /**
  * Build the design condition.
@@ -185,13 +209,16 @@ function conditionFrom(
 
   try {
     if (type.startsWith('wetbulb')) {
-      const wb = readNumber(fields, 'wetbulb at maximum dry-bulb');
+      const wb = readNumber(fields, ...HUMIDITY_FIELD);
       if (wb === undefined) return 'has a wet-bulb condition with no wet-bulb value';
       return { state: fromTdbTwb(tdb, asDisplay(wb), pressure, units), basis: 'Wet bulb' };
     }
     if (type.startsWith('dewpoint')) {
-      const dp = readNumber(fields, 'wetbulb at maximum dry-bulb');
+      const dp = readNumber(fields, ...HUMIDITY_FIELD);
       if (dp === undefined) return 'has a dew-point condition with no dew-point value';
+      // The file gives dry bulb and dew point; wet bulb is solved from them
+      // through the humidity ratio, so the point plots where it belongs and the
+      // panel can show a wet bulb the file never stated.
       return { state: fromTdbTdp(tdb, asDisplay(dp), pressure, units), basis: 'Dew point' };
     }
     if (type.startsWith('enthalpy')) {

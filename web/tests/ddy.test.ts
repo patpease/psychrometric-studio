@@ -6,9 +6,18 @@
  * decoys are the point — a DDY holds a dozen or more design days, and several
  * have names close enough to the wanted ones that a loose match picks up a wind
  * speed and reports it as a temperature.
+ *
+ * **The humidity field changes its name with the condition type**, and an
+ * earlier version of this file did not: it labelled every one `Wetbulb at
+ * Maximum Dry-Bulb`, matching what the parser looked for, so the suite agreed
+ * with the bug and a real file lost its dehumidification day. The verbatim
+ * block at the end of this file exists so that cannot happen again — it is
+ * copied from an actual download rather than generated from the same
+ * assumptions as the code.
  */
 import { describe, it, expect } from 'vitest';
 import { parseDdy, convertDesignDays } from '../src/weather/ddy.js';
+import { fromTdbTdp } from '../src/psych/state.js';
 import { humidityRatioToDisplay } from '../src/psych/units.js';
 
 /** One design-day object, with the field comments a real file carries. */
@@ -30,7 +39,7 @@ function designDay(
  DefaultMultipliers, !- Dry-Bulb Temperature Range Modifier Type
            ,      !- Dry-Bulb Temperature Range Modifier Day Schedule Name
     ${humidityType},      !- Humidity Condition Type
-      ${humidityValue},      !- Wetbulb at Maximum Dry-Bulb {C}
+      ${humidityValue},      !- ${humidityType === 'Dewpoint' ? 'Dewpoint' : 'Wetbulb'} at Maximum Dry-Bulb {C}
            ,      !- Humidity Indicating Day Schedule Name
       ${humidityRatio},      !- Humidity Ratio at Maximum Dry-Bulb {kgWater/kgDryAir}
       ${enthalpy},      !- Enthalpy at Maximum Dry-Bulb {J/kg}
@@ -170,5 +179,100 @@ describe('switching unit systems', () => {
   it('parses natively in SI too', () => {
     const si = parseDdy(FIXTURE, 'SI');
     expect(si.days.find((d) => d.tag === 'HD')!.state.tdb).toBeCloseTo(-13.1, 6);
+  });
+});
+
+/**
+ * A design day copied verbatim from a real Climate.OneBuilding download.
+ *
+ * Generated fixtures test the parser against the author's understanding of the
+ * format. This tests it against the format. The two differ in exactly the place
+ * that matters here: a dew-point condition names its field `Dewpoint at Maximum
+ * Dry-Bulb`, not `Wetbulb at ...`.
+ *
+ * The header comment carries ASHRAE's own humidity ratio for the condition,
+ * which makes it a published cross-check on the psychrometry rather than only
+ * on the parsing.
+ */
+const VERBATIM_DEHUMIDIFICATION = `! Boston-Logan.Intl.AP_MA_USA Annual Cooling (DP=>MDB) .4%, MDB=27.1C DP=22.6C HR=0.0174
+ SizingPeriod:DesignDay,
+  Boston-Logan.Intl.AP Ann Clg .4% Condns DP=>MDB,     !- Name
+          7,      !- Month
+         21,      !- Day of Month
+  SummerDesignDay,!- Day Type
+       27.1,      !- Maximum Dry-Bulb Temperature {C}
+        8.0,      !- Daily Dry-Bulb Temperature Range {C}
+ DefaultMultipliers, !- Dry-Bulb Temperature Range Modifier Type
+           ,      !- Dry-Bulb Temperature Range Modifier Day Schedule Name
+    Dewpoint,     !- Humidity Condition Type
+       22.6,      !- Dewpoint at Maximum Dry-Bulb {C}
+           ,      !- Humidity Indicating Day Schedule Name
+           ,      !- Humidity Ratio at Maximum Dry-Bulb {kgWater/kgDryAir}
+           ,      !- Enthalpy at Maximum Dry-Bulb {J/kg}
+           ,      !- Daily Wet-Bulb Temperature Range {deltaC}
+    101281.,      !- Barometric Pressure {Pa}
+        5.9,      !- Wind Speed {m/s} design conditions vs. traditional 3.35 m/s (7mph)
+        240,      !- Wind Direction {Degrees; N=0, S=180}
+         No,      !- Rain {Yes/No}
+         No,      !- Snow on ground {Yes/No}
+         No,      !- Daylight Savings Time Indicator
+   ASHRAETau2017, !- Solar Model Indicator
+           ,      !- Beam Solar Day Schedule Name
+           ,      !- Diffuse Solar Day Schedule Name
+      0.463,      !- ASHRAE Clear Sky Optical Depth for Beam Irradiance (taub)
+      2.248;      !- ASHRAE Clear Sky Optical Depth for Diffuse Irradiance (taud)
+`;
+
+describe('a real dew-point design day', () => {
+  const parsed = parseDdy(VERBATIM_DEHUMIDIFICATION, 'SI');
+  const day = parsed.days.find((entry) => entry.tag === 'DD');
+
+  it('is found, under the field name a generator actually writes', () => {
+    expect(day, parsed.problems.join(' ')).toBeDefined();
+    expect(day!.humidityBasis).toBe('Dew point');
+  });
+
+  it('reads the stated dry bulb and dew point', () => {
+    expect(day!.state.tdb).toBeCloseTo(27.1, 6);
+    expect(day!.state.tdp).toBeCloseTo(22.6, 1);
+  });
+
+  it('derives close to the humidity ratio ASHRAE publishes for it', () => {
+    // The header states HR=0.0174 at MDB=27.1C, DP=22.6C, 101281 Pa. The
+    // derivation from the *stated* dew point gives 0.01731 — half a percent
+    // low, and the difference is real rather than an error. See below.
+    expect(day!.state.w).toBeGreaterThan(0.0174 * 0.99);
+    expect(day!.state.w).toBeLessThan(0.0174 * 1.01);
+  });
+
+  it('differs from the published figure only by the file’s own rounding', () => {
+    // Worth demonstrating rather than asserting, because someone will compare
+    // the panel against the header comment and want to know which is wrong.
+    //
+    // Neither is. The file states the dew point to one decimal but computed its
+    // humidity ratio from the unrounded value: 0.0174 corresponds to about
+    // 22.69 °C, which rounds to the 22.6 printed. Solving from 22.6 and from
+    // 22.7 brackets the published number, which is what "rounding" means here.
+    const atStated = fromTdbTdp(27.1, 22.6, 101281, 'SI').w;
+    const atNextTenth = fromTdbTdp(27.1, 22.7, 101281, 'SI').w;
+    expect(atStated).toBeLessThan(0.0174);
+    expect(atNextTenth).toBeGreaterThan(0.0174);
+
+    // And it is not the pressure: across every plausible station value the
+    // humidity ratio moves by a hundredth of what the gap is.
+    const atSeaLevel = fromTdbTdp(27.1, 22.6, 101325, 'SI').w;
+    expect(Math.abs(atSeaLevel - atStated)).toBeLessThan(0.00002);
+  });
+
+  it('derives a wet bulb, which the file never states', () => {
+    // The whole point of solving rather than reading: the file gives dry bulb
+    // and dew point, and the panel and the chart both need a wet bulb.
+    expect(day!.state.twb).toBeGreaterThan(day!.state.tdp);
+    expect(day!.state.twb).toBeLessThan(day!.state.tdb);
+    expect(day!.state.twb).toBeCloseTo(23.9, 0);
+  });
+
+  it('is more humid than it is hot — which is why it is published', () => {
+    expect(day!.state.rh).toBeGreaterThan(0.7);
   });
 });

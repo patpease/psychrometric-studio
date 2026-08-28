@@ -146,6 +146,29 @@ The four names are matched specifically rather than loosely. A DDY also contains
 `Ann Htg Wind 99.6% Condns WS=>MCDB`, which a relaxed match on "Htg 99.6%" would
 take as the heating design day and report a wind speed as a temperature.
 
+**The field is named for the value it carries.** A wet-bulb condition writes
+`Wetbulb at Maximum Dry-Bulb`; a dew-point one writes `Dewpoint at ...`. Both
+are read, and so is the dictionary's own `Wetbulb or DewPoint at ...`. Reading
+only the first loses every dehumidification day — which was the state of this
+parser until a real file was put through it.
+
+### Why the humidity ratio may not match the file's header
+
+A dew-point design day gives dry bulb and dew point; the wet bulb shown in the
+panel is solved from them. The `!` header comment above the object also states a
+humidity ratio, and it will usually differ from what this tool derives by a few
+tenths of a percent.
+
+Neither is wrong. The header's figure is computed from the unrounded source
+data, while the object states the dew point to one decimal. For Boston's
+`DP=>MDB` day the header says `HR=0.0174`; solving from the stated 22.6 °C gives
+0.01731, and 22.7 °C would give 0.01742 — the published value sits between them.
+Station pressure is not the cause: across every plausible value it moves the
+humidity ratio by about a hundredth of the gap.
+
+This tool derives from the values in the object, because those are the ones it
+can see and the ones the chart is drawn from.
+
 ### Using one for the entering condition
 
 When a weather file is loaded, a source stage offers the four as a **Design

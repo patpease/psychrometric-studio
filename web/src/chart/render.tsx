@@ -318,15 +318,6 @@ export function Chart({
       <g clipPath="url(#plot-clip)">
         {/* Comfort zones sit behind everything: they are context for the
             chart, not a layer over it. */}
-        {designDays && designDays.length > 0 && (
-          <DesignDayOverlay
-            days={designDays}
-            scales={scales}
-            selected={selectedDesignDay}
-            onSelect={onSelectDesignDay ?? (() => undefined)}
-          />
-        )}
-
         {comfortZones && comfortZones.length > 0 && (
           <ComfortOverlay zones={comfortZones} scales={scales} />
         )}
@@ -346,6 +337,21 @@ export function Chart({
         {DRAW_ORDER.filter((family) => visibility[family]).map((family) => (
           <LineFamily key={family} family={family} lines={families[family]} scales={scales} />
         ))}
+
+        {/*
+          Above the gridlines and the line families, below the process chain.
+          A design condition has to be findable at a glance — drawn under the
+          families it disappears into them — but the chain is the thing being
+          worked on and stays on top.
+        */}
+        {designDays && designDays.length > 0 && (
+          <DesignDayOverlay
+            days={designDays}
+            scales={scales}
+            selected={selectedDesignDay}
+            onSelect={onSelectDesignDay ?? (() => undefined)}
+          />
+        )}
 
         {solved && (
           <ProcessOverlay
