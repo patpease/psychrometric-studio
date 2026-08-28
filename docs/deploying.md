@@ -1,8 +1,14 @@
 # Deploying
 
-The web application is a static site. Every calculation happens in the
-browser, so there is no server to run, no database, and nothing to keep — which
-is also why there is nothing to back up and nothing to breach.
+The web application is a static site with **one** server-side endpoint. Every
+calculation happens in the browser, so there is no database and nothing kept —
+which is also why there is nothing to back up and nothing to breach.
+
+The exception is `/api/weather`, a Cloudflare Pages Function that relays a
+weather archive from Climate.OneBuilding. It exists because that host sends no
+CORS header, so a browser cannot read a response from it however the request is
+phrased. Nothing is stored; the bytes pass through and are unzipped in the
+browser exactly as a dropped file would be.
 
 The PDF report service is optional and **v1 ships without it**. The tool detects
 its absence and hides the one button that needs it.
@@ -65,6 +71,31 @@ entirely and does not offer PDF export.
 > 8000 on their machine. Development sets it in `web/.env.development`, which is
 > checked in because it is not a secret.
 
+### The weather relay
+
+`web/functions/api/weather.ts` deploys automatically with the site — Pages picks
+up a `functions` directory relative to the **root directory**, which is why it
+lives under `web/` rather than at the repository root. No configuration, no
+separate service, no environment variable.
+
+It will fetch from exactly one host, and that allowlist is the whole security
+model: an endpoint that fetches whatever URL it is handed is an open proxy, and
+your domain carries the traffic. The checks live in `src/weather/proxy.ts`,
+which the Vite dev server also serves in development — so the logic that runs at
+the edge is the logic exercised locally, and the Function itself is a dozen
+lines of adapter.
+
+**Verify it after the first deploy.** It is the one part of the system that
+cannot be exercised on a developer's machine without Wrangler:
+
+```bash
+curl -sI "https://YOUR-SITE.pages.dev/api/weather?url=https://climate.onebuilding.org/WMO_Region_4_North_and_Central_America/ABW_Aruba/ABW_AA_Queen.Beatrix.Intl.AP.789820_TMYx.2009-2023.zip" | head -3
+```
+
+`200` with `content-type: application/zip` means it is live. A `404` means Pages
+did not find the `functions` directory — check the root directory setting. The
+interface says so plainly in that case rather than blaming the network.
+
 ### Headers
 
 `web/public/_headers` is copied into the build output and applied by Pages. It
@@ -76,8 +107,9 @@ exceptions, each with a reason recorded beside it in the file:
   then loads the serialised SVG through a blob URL to rasterise it.
 - `style-src 'unsafe-inline'` — React writes inline style attributes and the
   chart sets stroke and fill per element. There is no way to hash those.
-- `connect-src 'self'` — **must be widened if a report service is deployed**, or
-  the browser blocks the request no matter what `VITE_API_URL` says.
+- `connect-src 'self'` — covers the weather relay, which is same-origin by
+  design. **Must be widened if a report service is deployed**, or the browser
+  blocks that request no matter what `VITE_API_URL` says.
 
 The policy was verified against a production build with every export exercised:
 project file, CSV, SVG, PNG, and share link, with zero violations.

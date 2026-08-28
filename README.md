@@ -66,7 +66,10 @@ New to the codebase? Read [CLAUDE.md](CLAUDE.md) — it is the orientation.
 ## Deploying
 
 A static site on Cloudflare Pages: root directory `web`, build `npm run build`,
-output directory `dist`. Leave `VITE_API_URL` unset and the tool ships without the PDF
+output directory `dist`. One Pages Function ships with it — `/api/weather`,
+which relays weather archives from Climate.OneBuilding because that host sends
+no CORS header. It needs no configuration but is worth checking after the first
+deploy. Leave `VITE_API_URL` unset and the tool ships without the PDF
 report, which is the v1 configuration. Full instructions, the content security
 policy, and what changes when you add the report service are in
 [docs/deploying.md](docs/deploying.md).

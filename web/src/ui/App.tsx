@@ -661,14 +661,27 @@ export function App(): React.JSX.Element {
           >
             <WeatherPanel
               state={weather}
-              onChange={setWeather}
+              onChange={(next) => {
+                /*
+                 * Adopt the station's elevation the moment a file arrives.
+                 *
+                 * Every hour's humidity ratio is computed at that hour's own
+                 * station pressure, so a chart still drawn for sea level puts
+                 * every plotted point off the relative-humidity lines it
+                 * belongs to. That was previously a button someone had to
+                 * find and press, which made the correct reading the optional
+                 * one. Site pressure remains editable — the panel says where
+                 * the number came from.
+                 */
+                if (next.file && next.file !== weather.file) {
+                  setPressureMode('altitude');
+                  setAltitude(Math.round(next.file.location.elevation));
+                }
+                setWeather(next);
+              }}
               units={units}
               zones={zones}
               dark={dark}
-              onAdoptElevation={(elevation) => {
-                setPressureMode('altitude');
-                setAltitude(Math.round(elevation));
-              }}
             />
           </Collapsible>
 
@@ -779,6 +792,16 @@ export function App(): React.JSX.Element {
             <p className="basis">
               {describeBasis(atmosphere, (p) => formatPressure(p, units, true))}
             </p>
+
+            {weather.file && pressureMode === 'altitude' && (
+              <p className="comfort-note">
+                Set from {describeLocation(weather.file.location) || 'the loaded weather file'}.
+                Each hour’s humidity ratio is computed at that hour’s own station
+                pressure, so matching the chart to the site keeps the plotted
+                points on the relative-humidity lines they belong to. Change it
+                above if you are designing for somewhere else.
+              </p>
+            )}
             </section>
           </Collapsible>
 

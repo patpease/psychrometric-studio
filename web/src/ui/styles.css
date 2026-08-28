@@ -2148,3 +2148,44 @@ body {
 .design-day-field select {
   font-size: 0.7rem;
 }
+
+/* ------------------------------------------------------- weather by link */
+
+.weather-url {
+  margin: 0.6rem 0 0.5rem;
+}
+
+.weather-url label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+}
+
+.weather-url-row {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.weather-url-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.weather-url-row button {
+  flex-shrink: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+}
+
+.weather-url-row button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

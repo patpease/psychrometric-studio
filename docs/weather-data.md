@@ -102,6 +102,27 @@ at that count SVG pans visibly badly. Binning the full year takes about 6 ms,
 comfortably inside a frame, so the density map recomputes on every zoom rather
 than being scaled.
 
+## Fetching by link
+
+The panel accepts a Climate.OneBuilding URL as well as a dropped file. It cannot
+do so directly: that host sends no `Access-Control-Allow-Origin`, so a browser
+fetch fails outright and a `no-cors` request returns an opaque body that cannot
+be read — which is worse than an error, because it looks like success. Verified
+twice, in Phase 5 and again when this was built.
+
+The request therefore goes through `/api/weather`, a Cloudflare Pages Function
+on the site's own origin. It fetches from **one host only**; an endpoint that
+relays whatever URL it is handed is an open proxy, and the domain carries the
+traffic. Once the bytes arrive, the path rejoins the dropped-file one — unzipped
+and parsed in the browser — so "the file is not stored" stays true whichever way
+it got there.
+
+This relays one archive per deliberate user action: the same file, at the same
+frequency, as downloading it by hand. That is a different proposition from the
+station index Phase 5 declined to build, which would have crawled the site. If
+usage grows past incidental, the right move is to ask Climate.OneBuilding rather
+than to keep quiet.
+
 ## Design conditions
 
 A Climate.OneBuilding archive contains a `.ddy` beside the `.epw`, and for

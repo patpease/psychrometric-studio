@@ -22,6 +22,7 @@ import {
 import { densityLegend, type WeatherMode } from '../chart/WeatherLayer.js';
 import type { ComfortZone } from '../comfort/polygon.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
+import { RELAY_PATH, archiveNameFrom } from '../weather/proxy.js';
 import type { DesignDayKind } from '../weather/ddy.js';
 import { formatTemperature } from './format.js';
 
@@ -48,8 +49,6 @@ export interface WeatherPanelProps {
   units: UnitSystem;
   zones: readonly ComfortZone[];
   dark: boolean;
-  /** Offer to adopt the file's site elevation as the chart pressure. */
-  onAdoptElevation: (elevation: number) => void;
 }
 
 export function WeatherPanel({
@@ -58,11 +57,55 @@ export function WeatherPanel({
   units,
   zones,
   dark,
-  onAdoptElevation,
 }: WeatherPanelProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [reading, setReading] = useState(false);
   const [dragging, setDragging] = useState(false);
+
+  const [url, setUrl] = useState('');
+  const [urlProblem, setUrlProblem] = useState<string | null>(null);
+
+  /**
+   * Fetch an archive by address.
+   *
+   * Climate.OneBuilding sends no CORS header, so the browser cannot read a
+   * response from it directly — this goes through a relay on our own origin.
+   * See `weather/proxy.ts` for why, and for why the relay will fetch from
+   * exactly one host.
+   *
+   * Once the bytes arrive the path rejoins the dropped-file one: the archive is
+   * unzipped and parsed in the browser exactly as before, so "the file is not
+   * stored" stays true whichever way it got here.
+   */
+  const loadFromUrl = async (): Promise<void> => {
+    setUrlProblem(null);
+    setReading(true);
+    try {
+      const response = await fetch(`${RELAY_PATH}?url=${encodeURIComponent(url.trim())}`);
+
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => null)) as { message?: string } | null;
+        setUrlProblem(
+          detail?.message ??
+            // A 404 from the site itself rather than from the relay means the
+            // relay is not deployed — worth saying plainly, because the fix is
+            // a deployment setting rather than anything the user did.
+            (response.status === 404
+              ? 'The fetch service is not available on this deployment. Download the file and drop it in.'
+              : `The file could not be fetched (${response.status}).`),
+        );
+        return;
+      }
+
+      const blob = await response.blob();
+      await load(new File([blob], archiveNameFrom(url), { type: 'application/zip' }));
+      setUrl('');
+    } catch {
+      setUrlProblem('The file could not be fetched. Download it and drop it in instead.');
+    } finally {
+      setReading(false);
+    }
+  };
 
   const load = async (file: File): Promise<void> => {
     setReading(true);
@@ -120,13 +163,33 @@ export function WeatherPanel({
             }}
           />
 
+          <div className="weather-url">
+            <label htmlFor="weather-url">Or paste a link to a .zip</label>
+            <div className="weather-url-row">
+              <input
+                id="weather-url"
+                type="url"
+                placeholder="https://climate.onebuilding.org/…/….zip"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && url.trim()) void loadFromUrl();
+                }}
+              />
+              <button type="button" onClick={() => void loadFromUrl()} disabled={!url.trim() || reading}>
+                Fetch
+              </button>
+            </div>
+          </div>
+
+          {urlProblem && <p className="comfort-limit">{urlProblem}</p>}
+
           <p className="comfort-note">
-            Download a weather file from{' '}
             <a href="https://climate.onebuilding.org/" target="_blank" rel="noreferrer noopener">
               Climate.OneBuilding.org
-            </a>
-            , then drop the ZIP straight in — it will be opened for you. Nothing
-            is uploaded; the file is read in your browser.
+            </a>{' '}
+            is recommended for weather files, either add a .zip or directly
+            link. File is not stored, data is extracted in the browser.
           </p>
         </>
       )}
@@ -140,9 +203,22 @@ export function WeatherPanel({
             <dd>
               {state.file.location.elevation.toFixed(0)} {LABELS[units].altitude}
             </dd>
-            <dt>Hours read</dt>
-            <dd>{state.file.hours.length.toLocaleString()}</dd>
           </dl>
+
+          {/*
+            A complete year needs no announcement — 8,760 is what everyone
+            expects, and saying so is a line of noise on every load. A short
+            year is the case worth interrupting for, because every statistic
+            below is then drawn from less than a year and is not an annual
+            figure.
+          */}
+          {state.file.hours.length < 8760 && (
+            <p className="comfort-limit">
+              Only {state.file.hours.length.toLocaleString()} of 8,760 hours were
+              read. Statistics below are still valid for the hours present, but
+              they are not annual totals.
+            </p>
+          )}
 
           {state.file.design && state.file.design.days.length > 0 && (
             <>
@@ -188,19 +264,6 @@ export function WeatherPanel({
               {problem}
             </p>
           ))}
-
-          <button
-            type="button"
-            className="reset"
-            onClick={() => onAdoptElevation(state.file!.location.elevation)}
-          >
-            Use this elevation for the chart
-          </button>
-          <p className="comfort-note">
-            Each hour’s humidity ratio is computed at that hour’s own station
-            pressure. Matching the chart to the site keeps the plotted points on
-            the relative-humidity lines they belong to.
-          </p>
 
           {state.file.problems.map((problem) => (
             <p key={problem} className="comfort-limit">
@@ -279,9 +342,8 @@ export function WeatherPanel({
                 </div>
               ))}
               <p className="comfort-note">
-                Counted against the still-air comfort zone for the clothing and
-                activity set above. It says what the outdoor climate does, not
-                what the building does with it.
+                Comfort hours are outside conditions and are indicators of the
+                overall harshness of the climates.
               </p>
             </>
           )}
@@ -294,13 +356,6 @@ export function WeatherPanel({
             Remove weather file
           </button>
 
-          <p className="citation">
-            Weather data: Lawrie, Linda K, Drury B Crawley. 2026.{' '}
-            <em>Development of Global Typical Meteorological Years (TMYx)</em>.{' '}
-            <a href="https://climate.onebuilding.org/" target="_blank" rel="noreferrer noopener">
-              climate.onebuilding.org
-            </a>
-          </p>
         </>
       )}
     </section>
