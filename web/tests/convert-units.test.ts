@@ -8,9 +8,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { convertStages, convertComfort, convertAltitude } from '../src/ui/convertProject.js';
-import { solveProject } from '../src/processes/index.js';
+import { solveSystem } from '../src/processes/index.js';
 import { DEFAULTS, powerAsDuty, type UnitSystem } from '../src/psych/units.js';
-import type { Project, Stage } from '../src/types/project.js';
+import type { Stage, SystemDefinition } from '../src/types/project.js';
 
 const IP_STAGES: Stage[] = [
   { id: 'oa', type: 'source', airflow: 2000, params: { tdb: 95, rh: 0.4 } },
@@ -20,13 +20,8 @@ const IP_STAGES: Stage[] = [
   { id: 'rm', type: 'room', params: { sensible: 40, latent: 10 } },
 ];
 
-function project(stages: Stage[], units: UnitSystem): Project {
-  return {
-    schemaVersion: 1,
-    units,
-    atmosphere: { basis: 'standard' },
-    airstreams: [{ id: 'supply', name: 'Supply', stages }],
-  };
+function system(stages: Stage[]): Pick<SystemDefinition, 'airstreams'> {
+  return { airstreams: [{ id: 'supply', name: 'Supply', stages }] };
 }
 
 describe('converting stages between unit systems', () => {
@@ -80,8 +75,8 @@ describe('converting stages between unit systems', () => {
   it('solves to the same physical result in both systems', () => {
     // The real test: the same system, expressed either way, must describe the
     // same air. This is what the blank chart was failing.
-    const ip = solveProject(project(IP_STAGES, 'IP'), DEFAULTS.IP.standardPressure, 'IP');
-    const converted = solveProject(project(si, 'SI'), DEFAULTS.SI.standardPressure, 'SI');
+    const ip = solveSystem(system(IP_STAGES), DEFAULTS.IP.standardPressure, 'IP');
+    const converted = solveSystem(system(si), DEFAULTS.SI.standardPressure, 'SI');
 
     const ipStages = ip.airstreams[0]!.stages;
     const siStages = converted.airstreams[0]!.stages;
@@ -104,7 +99,7 @@ describe('converting stages between unit systems', () => {
     // The visible symptom of the bug: every state point outside the SI chart
     // domain, so the chart drew nothing.
     const [min, max] = DEFAULTS.SI.tdbRange;
-    const solved = solveProject(project(si, 'SI'), DEFAULTS.SI.standardPressure, 'SI');
+    const solved = solveSystem(system(si), DEFAULTS.SI.standardPressure, 'SI');
     for (const stage of solved.airstreams[0]!.stages) {
       const tdb = stage.result!.state.tdb;
       expect(tdb, `${stage.displayName} at ${tdb} °C`).toBeGreaterThan(min);

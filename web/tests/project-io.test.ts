@@ -21,12 +21,15 @@ import {
   writeProject,
   MIGRATIONS,
   type SessionState,
+  blankSystem,
+  type SessionSystem,
 } from '../src/io/project.js';
 import { validateProject } from '../src/io/validate.js';
+import { SCHEMA_VERSION, systemLabel } from '../src/types/project.js';
 import { decodeProject, encodeProject, readFragment, shareLink, MAX_URL_LENGTH } from '../src/io/url.js';
 import { toCsv } from '../src/io/csv.js';
 import { buildReportPayload } from '../src/io/report.js';
-import { solveProject } from '../src/processes/chain.js';
+import { solveSystem } from '../src/processes/chain.js';
 import { standardAtmosphere } from '../src/psych/atmosphere.js';
 import { defaultDomain } from '../src/chart/scales.js';
 import { DEFAULT_VISIBILITY } from '../src/chart/theme.js';
@@ -45,32 +48,35 @@ const STAGES: Stage[] = [
   { id: 'rm', type: 'room', name: 'Zone', params: { sensible: 42, latent: 11 } },
 ];
 
+/** A session holding one cooling case, which is what most of these assert on. */
 function session(overrides: Partial<SessionState> = {}): SessionState {
   return {
     units: 'IP',
-    domain: defaultDomain('IP'),
     pressureMode: 'sea-level',
     altitude: 0,
     explicitPressure: '',
-    stages: STAGES,
-    visibility: { ...DEFAULT_VISIBILITY },
-    showProtractor: false,
+    systems: [blankSystem('cooling', 'IP', STAGES)],
+    activeSystem: 0,
     comfort: defaultComfortSettings('IP'),
-    weather: null,
+    station: null,
     meta: { name: 'Test AHU', engineer: 'PP' },
     ...overrides,
   };
 }
 
+/** Apply overrides to the one system a `session()` fixture holds. */
+function withSystem(
+  overrides: Partial<SessionSystem>,
+  rest: Partial<SessionState> = {},
+): SessionState {
+  const base = session(rest);
+  return { ...base, systems: [{ ...base.systems[0]!, ...overrides }] };
+}
+
 function solve(stages: Stage[] = STAGES) {
   const pressure = standardAtmosphere('IP').pressure;
-  return solveProject(
-    {
-      schemaVersion: 1,
-      units: 'IP',
-      atmosphere: { basis: 'standard' },
-      airstreams: [{ id: 'supply', name: 'Supply', role: 'supply', stages }],
-    } as never,
+  return solveSystem(
+    { airstreams: [{ id: 'supply', name: 'Supply', role: 'supply', stages }] },
     pressure,
     'IP',
   ).airstreams[0]!;
@@ -80,14 +86,18 @@ function solve(stages: Stage[] = STAGES) {
 
 describe('round trip', () => {
   it('restores a session unchanged', () => {
-    const original = session({
-      domain: { tdbMin: 40, tdbMax: 110, wMin: 0.002, wMax: 0.026 },
-      pressureMode: 'altitude',
-      altitude: 5280,
-      showProtractor: true,
-      visibility: { ...DEFAULT_VISIBILITY, dewPoint: true, specificVolume: false },
-      comfort: { ...defaultComfortSettings('IP'), met: 1.3, clothing: [0.9, 0.4], model: 'adaptive' },
-    });
+    const original = withSystem(
+      {
+        domain: { tdbMin: 40, tdbMax: 110, wMin: 0.002, wMax: 0.026 },
+        showProtractor: true,
+        visibility: { ...DEFAULT_VISIBILITY, dewPoint: true, specificVolume: false },
+      },
+      {
+        pressureMode: 'altitude',
+        altitude: 5280,
+        comfort: { ...defaultComfortSettings('IP'), met: 1.3, clothing: [0.9, 0.4], model: 'adaptive' },
+      },
+    );
 
     const restored = fromProject(readProject(writeProject(toProject(original))).project!);
 
@@ -99,10 +109,12 @@ describe('round trip', () => {
   });
 
   it('survives the trip through a share link', () => {
-    const original = session({ units: 'SI', domain: defaultDomain('SI') });
+    const original = withSystem({ domain: defaultDomain('SI') }, { units: 'SI' });
     const decoded = decodeProject(encodeProject(toProject(original)));
     expect(decoded.project).not.toBeNull();
-    expect(fromProject(decoded.project!).stages).toEqual(original.stages);
+    expect(fromProject(decoded.project!).systems[0]!.stages).toEqual(
+      original.systems[0]!.stages,
+    );
   });
 
   it('keeps the clothing levels the right way round', () => {
@@ -136,13 +148,7 @@ describe('round trip', () => {
     // An EPW is ~1.5 MB and is redistributable only under its source's terms.
     const written = toProject(
       session({
-        weather: {
-          station: { city: 'Denver', country: 'USA', wmo: '725650', elevation: 5413 },
-          mode: 'density',
-          months: [],
-          hours: [],
-          presetIndex: 0,
-        },
+        station: { city: 'Denver', country: 'USA', wmo: '725650', elevation: 5413 },
       }),
     );
     const text = writeProject(written);
@@ -188,22 +194,40 @@ describe('the two validators agree', () => {
 describe('rejection messages', () => {
   it('names the stage rather than a JSON pointer', () => {
     const { problems } = validateProject({
-      schemaVersion: 1,
+      schemaVersion: SCHEMA_VERSION,
       units: 'IP',
       atmosphere: { basis: 'standard' },
-      airstreams: [{ id: 'a', name: 'A', stages: [{ id: 'cc', name: 'Cooling coil', type: 'cooling', airflow: -5 }] }],
+      systems: [
+        {
+          id: 'cooling',
+          role: 'cooling',
+          airstreams: [
+            {
+              id: 'a',
+              name: 'A',
+              stages: [{ id: 'cc', name: 'Cooling coil', type: 'cooling', airflow: -5 }],
+            },
+          ],
+        },
+      ],
     });
     expect(problems.join(' ')).toContain('Cooling coil');
   });
 
   it('catches a duplicate id, which a coupling would resolve to the wrong thing', () => {
     const { problems } = validateProject({
-      schemaVersion: 1,
+      schemaVersion: SCHEMA_VERSION,
       units: 'IP',
       atmosphere: { basis: 'standard' },
-      airstreams: [
-        { id: 'a', name: 'A', stages: [] },
-        { id: 'a', name: 'B', stages: [] },
+      systems: [
+        {
+          id: 'cooling',
+          role: 'cooling',
+          airstreams: [
+            { id: 'a', name: 'A', stages: [] },
+            { id: 'a', name: 'B', stages: [] },
+          ],
+        },
       ],
     });
     expect(problems.join(' ')).toMatch(/repeats the id/);
@@ -211,14 +235,62 @@ describe('rejection messages', () => {
 
   it('catches a coupling pointing at an airstream that is not in the file', () => {
     const { problems } = validateProject({
-      schemaVersion: 1,
+      schemaVersion: SCHEMA_VERSION,
       units: 'IP',
       atmosphere: { basis: 'standard' },
-      airstreams: [
+      systems: [
         {
-          id: 'supply',
-          name: 'Supply',
-          stages: [{ id: 'hr', type: 'recovery-plate', couplings: [{ role: 'exchange-stream', airstreamId: 'exhaust' }] }],
+          id: 'cooling',
+          role: 'cooling',
+          airstreams: [
+            {
+              id: 'supply',
+              name: 'Supply',
+              stages: [
+                {
+                  id: 'hr',
+                  type: 'recovery-plate',
+                  couplings: [{ role: 'exchange-stream', airstreamId: 'exhaust' }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(problems.join(' ')).toContain('exhaust');
+  });
+
+  it('does not resolve a coupling against another system', () => {
+    // Airstream ids are scoped to their system. Heating naming a stream
+    // "exhaust" must not satisfy a coupling written in the cooling case, or a
+    // recovery device would silently exchange heat with the wrong duct.
+    const { problems } = validateProject({
+      schemaVersion: SCHEMA_VERSION,
+      units: 'IP',
+      atmosphere: { basis: 'standard' },
+      systems: [
+        {
+          id: 'cooling',
+          role: 'cooling',
+          airstreams: [
+            {
+              id: 'supply',
+              name: 'Supply',
+              stages: [
+                {
+                  id: 'hr',
+                  type: 'recovery-plate',
+                  couplings: [{ role: 'exchange-stream', airstreamId: 'exhaust' }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'heating',
+          role: 'heating',
+          airstreams: [{ id: 'exhaust', name: 'Exhaust', stages: [] }],
         },
       ],
     });
@@ -226,7 +298,7 @@ describe('rejection messages', () => {
   });
 
   it('says plainly when a file comes from a newer build', () => {
-    const { problems } = validateProject({ schemaVersion: 99, units: 'IP', atmosphere: { basis: 'standard' }, airstreams: [] });
+    const { problems } = validateProject({ schemaVersion: 99, units: 'IP', atmosphere: { basis: 'standard' }, systems: [] });
     expect(problems[0]).toMatch(/newer version/);
   });
 
@@ -240,28 +312,26 @@ describe('rejection messages', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('superseded fields are still read', () => {
-  it('reads maxHumidityRatio as the top of an axis starting at zero', () => {
-    const project = {
+  /** A v1 file, read the way a real one arrives: through the migration. */
+  function openV1(extra: Record<string, unknown>): ReturnType<typeof fromProject> {
+    const raw = {
       schemaVersion: 1,
       units: 'IP',
       atmosphere: { basis: 'standard' },
       airstreams: [{ id: 'a', name: 'A', stages: [] }],
-      chart: { maxHumidityRatio: 0.024 },
-    } as unknown as Project;
-    const restored = fromProject(project);
-    expect(restored.domain.wMin).toBe(0);
-    expect(restored.domain.wMax).toBe(0.024);
+      ...extra,
+    };
+    return fromProject(migrate(raw).raw as Project);
+  }
+
+  it('reads maxHumidityRatio as the top of an axis starting at zero', () => {
+    const restored = openV1({ chart: { maxHumidityRatio: 0.024 } });
+    expect(restored.systems[0]!.domain.wMin).toBe(0);
+    expect(restored.systems[0]!.domain.wMax).toBe(0.024);
   });
 
   it('reads the positional clothing array as [winter, summer]', () => {
-    const project = {
-      schemaVersion: 1,
-      units: 'IP',
-      atmosphere: { basis: 'standard' },
-      airstreams: [{ id: 'a', name: 'A', stages: [] }],
-      comfort: { clothing: [1.1, 0.45] },
-    } as unknown as Project;
-    expect(fromProject(project).comfort.clothing).toEqual([1.1, 0.45]);
+    expect(openV1({ comfort: { clothing: [1.1, 0.45] } }).comfort.clothing).toEqual([1.1, 0.45]);
   });
 });
 
@@ -272,9 +342,10 @@ describe('migration', () => {
   });
 
   it('chains across several versions', () => {
-    // Exercised with synthetic steps, because there are no real ones yet. The
-    // case this protects is a file two versions behind, which is the one that
-    // gets forgotten when migration is written after the fact.
+    // Two synthetic steps that hand off to the real v1→v2 one, so the chain
+    // under test ends where a genuine old file would. The case this protects is
+    // a file several versions behind — the one that gets forgotten when
+    // migration is written after the fact.
     const original = { ...MIGRATIONS };
     try {
       MIGRATIONS[-2] = (raw) => ({ ...raw, schemaVersion: -1, stepped: [-2] });
@@ -284,8 +355,11 @@ describe('migration', () => {
         stepped: [...(raw['stepped'] as number[]), -1],
       });
       const result = migrate({ schemaVersion: -2 });
-      expect(result.applied).toEqual([-2, -1]);
+      // The trailing 1 is the real migration: a chain does not stop at the last
+      // synthetic step, it runs until the file is current.
+      expect(result.applied).toEqual([-2, -1, 1]);
       expect((result.raw as Record<string, unknown>)['stepped']).toEqual([-2, -1]);
+      expect((result.raw as Record<string, unknown>)['schemaVersion']).toBe(SCHEMA_VERSION);
     } finally {
       for (const key of Object.keys(MIGRATIONS)) delete MIGRATIONS[Number(key)];
       Object.assign(MIGRATIONS, original);
@@ -323,7 +397,7 @@ describe('share links', () => {
       name: `Heating coil number ${i} with a deliberately long name`,
       params: { tdbOut: 70 + i },
     }));
-    const link = shareLink(toProject(session({ stages: many })), 'https://example.com/');
+    const link = shareLink(toProject(withSystem({ stages: many })), 'https://example.com/');
     expect(link.usable).toBe(false);
     expect(link.reason).toContain('Download the project file');
   });
@@ -443,5 +517,179 @@ describe('filenames', () => {
     expect(projectFilename({}, 'csv', new Date('2026-08-24T00:00:00Z'))).toBe(
       'psychrometric-study-2026-08-24.csv',
     );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe('two systems', () => {
+  const HEATING: Stage[] = [
+    { id: 'oa', type: 'source', name: 'Outdoor air', airflow: 500, params: { tdb: 5, rh: 0.6 } },
+    { id: 'hc', type: 'heating', name: 'Heating coil', params: { tdbOut: 92 } },
+  ];
+
+  function paired(): SessionState {
+    const base = session();
+    return {
+      ...base,
+      systems: [base.systems[0]!, blankSystem('heating', 'IP', HEATING)],
+    };
+  }
+
+  it('saves both, not just the one on screen', () => {
+    const written = toProject(paired());
+    expect(written.systems).toHaveLength(2);
+    expect(written.systems[1]!.airstreams[0]!.stages).toEqual(HEATING);
+  });
+
+  it('round-trips both chains independently', () => {
+    const restored = fromProject(readProject(writeProject(toProject(paired()))).project!);
+    expect(restored.systems).toHaveLength(2);
+    expect(restored.systems[0]!.stages).toEqual(STAGES);
+    expect(restored.systems[1]!.stages).toEqual(HEATING);
+    expect(restored.systems[0]!.role).toBe('cooling');
+    expect(restored.systems[1]!.role).toBe('heating');
+  });
+
+  it('remembers which system was open', () => {
+    const written = toProject({ ...paired(), activeSystem: 1 });
+    expect(fromProject(written).activeSystem).toBe(1);
+  });
+
+  it('clamps an active index that points past the end', () => {
+    // A hand-edited file can name a system that is not there, and every site
+    // that reaches for the active case would otherwise read undefined.
+    const written = { ...toProject(paired()), activeSystem: 7 };
+    expect(fromProject(written).activeSystem).toBe(1);
+  });
+
+  it('keeps each system on its own chart view', () => {
+    const wide = { tdbMin: 0, tdbMax: 120, wMin: 0, wMax: 0.03 };
+    const source = paired();
+    const written = toProject({
+      ...source,
+      systems: [source.systems[0]!, { ...source.systems[1]!, domain: wide }],
+    });
+    const restored = fromProject(written);
+    expect(restored.systems[1]!.domain).toEqual(wide);
+    expect(restored.systems[0]!.domain).not.toEqual(wide);
+  });
+
+  it('writes a label only when it is not the default for the role', () => {
+    // A file that spells out "Heating" pins today's wording forever. A renamed
+    // system still keeps the name its author chose.
+    const source = paired();
+    expect(toProject(source).systems[1]!.label).toBeUndefined();
+
+    const renamed = {
+      ...source,
+      systems: [source.systems[0]!, { ...source.systems[1]!, label: 'Morning warm-up' }],
+    };
+    expect(toProject(renamed).systems[1]!.label).toBe('Morning warm-up');
+    expect(fromProject(toProject(renamed)).systems[1]!.label).toBe('Morning warm-up');
+  });
+
+  it('still fits in a share link with both systems', () => {
+    // A second system was the obvious thing to push a link past the cap. It
+    // does not, because the two chains compress against each other: the pair
+    // costs a little over a hundred characters more than the one.
+    const one = shareLink(toProject(session()), 'https://example.com/');
+    const two = shareLink(toProject(paired()), 'https://example.com/');
+    expect(two.usable).toBe(true);
+    expect(two.length - one.length).toBeLessThan(400);
+  });
+
+  it('leaves an unnamed system to be called by its position', () => {
+    // The default name is positional, so it is resolved where it is shown
+    // rather than stored. Storing it would go stale the moment the systems
+    // were reordered — the name would follow the case, not the position.
+    const restored = fromProject(toProject(paired()));
+    expect(restored.systems[1]!.label).toBe('');
+    expect(systemLabel(restored.systems[1]!, 1)).toBe('System Mode 2');
+    expect(systemLabel(restored.systems[0]!, 0)).toBe('System Mode 1');
+  });
+
+  it('lets a name its author wrote override the position', () => {
+    const source = paired();
+    const renamed = {
+      ...source,
+      systems: [source.systems[0]!, { ...source.systems[1]!, label: 'Morning warm-up' }],
+    };
+    expect(systemLabel(fromProject(toProject(renamed)).systems[1]!, 1)).toBe('Morning warm-up');
+  });
+});
+
+describe('opening a version 1 file', () => {
+  /** A project as the previous release wrote one. */
+  const V1 = {
+    schemaVersion: 1,
+    units: 'IP',
+    meta: { name: 'Old project', client: 'Acme' },
+    atmosphere: { basis: 'altitude', altitude: 5280 },
+    airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages: STAGES }],
+    chart: { tdbRange: [40, 110], humidityRatioRange: [0, 0.026] },
+    comfort: { model: 'pmv', clothingWinter: 1.0, clothingSummer: 0.5 },
+    weather: {
+      station: { city: 'Denver', country: 'USA', wmo: '725650' },
+      mode: 'density',
+      months: [6, 7, 8],
+      hours: [],
+      presetIndex: 2,
+    },
+  };
+
+  const opened = readProject(JSON.stringify(V1));
+
+  it('opens, and says it was upgraded', () => {
+    expect(opened.problems).toEqual([]);
+    expect(opened.project).not.toBeNull();
+    expect(opened.migrated).toEqual([1]);
+  });
+
+  it('becomes a single cooling system', () => {
+    const restored = fromProject(opened.project!);
+    expect(restored.systems).toHaveLength(1);
+    expect(restored.systems[0]!.role).toBe('cooling');
+    expect(restored.systems[0]!.stages).toEqual(STAGES);
+  });
+
+  it('keeps the chart view the file was saved with', () => {
+    const domain = fromProject(opened.project!).systems[0]!.domain;
+    expect(domain.tdbMin).toBe(40);
+    expect(domain.tdbMax).toBe(110);
+    expect(domain.wMax).toBe(0.026);
+  });
+
+  it('splits the old weather object into station and filter', () => {
+    // v1 kept the station and the hour filter in one place. They now live at
+    // different levels, because every system reads the same file but looks at
+    // different hours — so this is a split rather than a move.
+    const restored = fromProject(opened.project!);
+    expect(restored.station?.city).toBe('Denver');
+    expect(restored.systems[0]!.weather.months).toEqual([6, 7, 8]);
+    expect(restored.systems[0]!.weather.mode).toBe('density');
+    expect(restored.systems[0]!.weather.presetIndex).toBe(2);
+  });
+
+  it('keeps everything that was already project-wide', () => {
+    const restored = fromProject(opened.project!);
+    expect(restored.meta.name).toBe('Old project');
+    expect(restored.meta.client).toBe('Acme');
+    expect(restored.altitude).toBe(5280);
+    expect(restored.comfort.clothing).toEqual([1.0, 0.5]);
+  });
+
+  it('re-saves as a current file that validates', () => {
+    const resaved = toProject(fromProject(opened.project!));
+    expect(resaved.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(schemaValid(resaved), ajv.errorsText(schemaValid.errors)).toBe(true);
+    expect(readProject(writeProject(resaved)).migrated).toEqual([]);
+  });
+
+  it('carries a v1 file with no weather at all', () => {
+    const bare = { ...V1, weather: undefined };
+    const restored = fromProject(readProject(JSON.stringify(bare)).project!);
+    expect(restored.station).toBeNull();
+    expect(restored.systems[0]!.weather.mode).toBe('off');
   });
 });

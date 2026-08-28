@@ -31,11 +31,15 @@ import type { UnitSystem } from '../psych/units.js';
 import { pressureFromDisplay, pressureToDisplay } from '../psych/units.js';
 import {
   SCHEMA_VERSION,
+  systemLabel,
   type AtmosphereSpec,
   type Project,
   type ProjectMeta,
   type Stage,
-  type WeatherSettings,
+  type SystemDefinition,
+  type SystemRole,
+  type WeatherStation,
+  type WeatherView,
 } from '../types/project.js';
 import type { ComfortSettingsState } from '../ui/ComfortPanel.js';
 import { defaultComfortSettings } from '../ui/ComfortPanel.js';
@@ -57,18 +61,65 @@ export type PressureMode = 'sea-level' | 'altitude' | 'explicit';
  */
 export interface SessionState {
   units: UnitSystem;
-  domain: ChartDomain;
   pressureMode: PressureMode;
   /** Site elevation in display units; meaningful when the mode is 'altitude'. */
   altitude: number;
   /** The explicit-pressure field as typed, in display units (psia | kPa). */
   explicitPressure: string;
+  /** Operating cases. Never empty; `activeSystem` always indexes one of them. */
+  systems: SessionSystem[];
+  activeSystem: number;
+  comfort: ComfortSettingsState;
+  /** Which weather file is loaded. Shared: every system reads the same year. */
+  station: WeatherStation | null;
+  meta: ProjectMeta;
+}
+
+/**
+ * One operating case, as the session holds it.
+ *
+ * The session resolves what the file leaves optional. A label is a plain string
+ * here rather than `string | undefined`, because the interface has to render
+ * something either way, and defaulting at each read site is exactly how two
+ * places end up disagreeing about what an unnamed heating case is called.
+ */
+export interface SessionSystem {
+  id: string;
+  role: SystemRole;
+  /** The user's own name for this case. Empty means it goes by its position. */
+  label: string;
+  notes: string;
   stages: Stage[];
+  domain: ChartDomain;
   visibility: Record<FamilyKey, boolean>;
   showProtractor: boolean;
-  comfort: ComfortSettingsState;
-  weather: WeatherSettings | null;
-  meta: ProjectMeta;
+  /** Which hours of the shared weather file this case looks at. */
+  weather: WeatherView;
+}
+
+/** A system with nothing in it, named from its role. */
+export function blankSystem(
+  role: SystemRole,
+  units: UnitSystem,
+  stages: Stage[] = [],
+): SessionSystem {
+  return {
+    id: role,
+    role,
+    label: '',
+    notes: '',
+    stages,
+    domain: defaultDomain(units),
+    visibility: { ...DEFAULT_VISIBILITY },
+    showProtractor: false,
+    weather: { mode: 'off', months: [], hours: [], presetIndex: 0 },
+  };
+}
+
+/** The system currently on screen. Clamped, so a bad index cannot crash a read. */
+export function activeSystemOf(session: SessionState): SessionSystem {
+  const index = Math.min(Math.max(session.activeSystem, 0), session.systems.length - 1);
+  return session.systems[index]!;
 }
 
 /* -------------------------------------------------------------------------- *
@@ -130,22 +181,8 @@ export function toProject(session: SessionState, now: Date = new Date()): Projec
     },
     units: session.units,
     atmosphere: atmosphereSpecFrom(session),
-    airstreams: [
-      { id: 'supply', name: 'Supply air', role: 'supply', stages: session.stages },
-    ],
-    chart: {
-      tdbRange: [session.domain.tdbMin, session.domain.tdbMax],
-      humidityRatioRange: [session.domain.wMin, session.domain.wMax],
-      projection: 'rectangular',
-      families: {
-        relativeHumidity: session.visibility.relativeHumidity,
-        wetBulb: session.visibility.wetBulb,
-        enthalpy: session.visibility.enthalpy,
-        specificVolume: session.visibility.specificVolume,
-        dewPoint: session.visibility.dewPoint,
-        protractor: session.showProtractor,
-      },
-    },
+    systems: session.systems.map((system) => systemToFile(system, session.station !== null)),
+    activeSystem: session.activeSystem,
     comfort: {
       metabolicRate: session.comfort.met,
       clothingWinter: session.comfort.clothing[0],
@@ -164,9 +201,49 @@ export function toProject(session: SessionState, now: Date = new Date()): Projec
   // inputs themselves are written either way: turning the overlay off should
   // not throw away the clothing levels you set.
   if (session.comfort.model !== 'off') project.comfort!.model = session.comfort.model;
-  if (session.weather) project.weather = session.weather;
+  if (session.station) project.weather = { station: session.station };
 
   return project;
+}
+
+/**
+ * One system, as it is written to a file.
+ *
+ * A label is written only when its author wrote one. A file that spells out the
+ * positional default pins today's wording forever, and would go stale the
+ * moment the systems were reordered; leaving it out lets the name follow the
+ * position, while a renamed system keeps the name it was given.
+ */
+function systemToFile(system: SessionSystem, hasWeatherFile: boolean): SystemDefinition {
+  const file: SystemDefinition = {
+    id: system.id,
+    role: system.role,
+    airstreams: [
+      { id: 'supply', name: 'Supply air', role: 'supply', stages: system.stages },
+    ],
+    chart: {
+      tdbRange: [system.domain.tdbMin, system.domain.tdbMax],
+      humidityRatioRange: [system.domain.wMin, system.domain.wMax],
+      projection: 'rectangular',
+      families: {
+        relativeHumidity: system.visibility.relativeHumidity,
+        wetBulb: system.visibility.wetBulb,
+        enthalpy: system.visibility.enthalpy,
+        specificVolume: system.visibility.specificVolume,
+        dewPoint: system.visibility.dewPoint,
+        protractor: system.showProtractor,
+      },
+    },
+  };
+
+  if (system.label.trim().length > 0) file.label = system.label.trim();
+  if (system.notes.trim().length > 0) file.notes = system.notes;
+  // An hour filter with no file to filter is not a setting anyone chose; it is
+  // whatever the controls happened to default to. Writing it would make an
+  // untouched project look configured.
+  if (hasWeatherFile) file.weather = { ...system.weather };
+
+  return file;
 }
 
 /* -------------------------------------------------------------------------- *
@@ -183,45 +260,30 @@ export function toProject(session: SessionState, now: Date = new Date()): Projec
  */
 export function fromProject(project: Project): SessionState {
   const units = project.units;
-  const fallbackDomain = defaultDomain(units);
-  const chart = project.chart ?? {};
   const comfort = project.comfort ?? {};
   const defaults = defaultComfortSettings(units);
-
-  const [tdbMin, tdbMax] = chart.tdbRange ?? [fallbackDomain.tdbMin, fallbackDomain.tdbMax];
-  const [wMin, wMax] = chart.humidityRatioRange ??
-    // The superseded form named only the top of the axis.
-    (chart.maxHumidityRatio !== undefined
-      ? [0, chart.maxHumidityRatio]
-      : [fallbackDomain.wMin, fallbackDomain.wMax]);
-
-  const families = chart.families ?? {};
-  const visibility: Record<FamilyKey, boolean> = {
-    // Saturation is not optional — it is the boundary of the region the chart
-    // describes, not a family you can turn off — so it is not in the file.
-    saturation: true,
-    relativeHumidity: families.relativeHumidity ?? DEFAULT_VISIBILITY.relativeHumidity,
-    wetBulb: families.wetBulb ?? DEFAULT_VISIBILITY.wetBulb,
-    enthalpy: families.enthalpy ?? DEFAULT_VISIBILITY.enthalpy,
-    specificVolume: families.specificVolume ?? DEFAULT_VISIBILITY.specificVolume,
-    dewPoint: families.dewPoint ?? DEFAULT_VISIBILITY.dewPoint,
-  };
 
   const clothing: [number, number] = [
     comfort.clothingWinter ?? comfort.clothing?.[0] ?? defaults.clothing[0],
     comfort.clothingSummer ?? comfort.clothing?.[1] ?? defaults.clothing[1],
   ];
 
+  // The validator guarantees at least one system, but `fromProject` is also
+  // reachable from tests and from hand-built objects, so a project with none
+  // opens as a new one rather than as a session with nothing to show.
+  const systems =
+    project.systems.length > 0
+      ? project.systems.map((system) => systemFromFile(system, units))
+      : [blankSystem('cooling', units)];
+
   return {
     units,
-    domain: { tdbMin: tdbMin!, tdbMax: tdbMax!, wMin: wMin!, wMax: wMax! },
     ...pressureFieldsFrom(project.atmosphere, units),
-    // Only the supply stream is editable in this build. A multi-airstream file
-    // is valid and its other streams are preserved on the project object; the
-    // editor simply does not show them yet.
-    stages: project.airstreams[0]?.stages ?? [],
-    visibility,
-    showProtractor: families.protractor ?? false,
+    systems,
+    // Clamped rather than trusted: a hand-edited file can name a system that
+    // is not there, and an out-of-range index would read as undefined at every
+    // site that reaches for the active case.
+    activeSystem: Math.min(Math.max(project.activeSystem ?? 0, 0), systems.length - 1),
     comfort: {
       model: comfort.model ?? 'off',
       met: comfort.metabolicRate ?? defaults.met,
@@ -231,8 +293,53 @@ export function fromProject(project: Project): SessionState {
       adaptiveIndoor: comfort.adaptiveIndoor ?? defaults.adaptiveIndoor,
       adaptivePrevailing: comfort.adaptivePrevailing ?? defaults.adaptivePrevailing,
     },
-    weather: project.weather ?? null,
+    station: project.weather?.station ?? null,
     meta: project.meta ?? {},
+  };
+}
+
+/** One system, read back with every optional field resolved to a value. */
+function systemFromFile(system: SystemDefinition, units: UnitSystem): SessionSystem {
+  const fallbackDomain = defaultDomain(units);
+  const chart = system.chart ?? {};
+
+  const [tdbMin, tdbMax] = chart.tdbRange ?? [fallbackDomain.tdbMin, fallbackDomain.tdbMax];
+  const [wMin, wMax] = chart.humidityRatioRange ??
+    // The superseded form named only the top of the axis.
+    (chart.maxHumidityRatio !== undefined
+      ? [0, chart.maxHumidityRatio]
+      : [fallbackDomain.wMin, fallbackDomain.wMax]);
+
+  const families = chart.families ?? {};
+  const view = system.weather ?? {};
+
+  return {
+    id: system.id,
+    role: system.role,
+    label: system.label ?? '',
+    notes: system.notes ?? '',
+    // Only the supply stream is editable in this build. A multi-airstream
+    // system is valid and its other streams are preserved on the project
+    // object; the editor simply does not show them yet.
+    stages: system.airstreams[0]?.stages ?? [],
+    domain: { tdbMin: tdbMin!, tdbMax: tdbMax!, wMin: wMin!, wMax: wMax! },
+    visibility: {
+      // Saturation is not optional — it is the boundary of the region the chart
+      // describes, not a family you can turn off — so it is not in the file.
+      saturation: true,
+      relativeHumidity: families.relativeHumidity ?? DEFAULT_VISIBILITY.relativeHumidity,
+      wetBulb: families.wetBulb ?? DEFAULT_VISIBILITY.wetBulb,
+      enthalpy: families.enthalpy ?? DEFAULT_VISIBILITY.enthalpy,
+      specificVolume: families.specificVolume ?? DEFAULT_VISIBILITY.specificVolume,
+      dewPoint: families.dewPoint ?? DEFAULT_VISIBILITY.dewPoint,
+    },
+    showProtractor: families.protractor ?? false,
+    weather: {
+      mode: view.mode ?? 'off',
+      months: [...(view.months ?? [])],
+      hours: [...(view.hours ?? [])],
+      presetIndex: view.presetIndex ?? 0,
+    },
   };
 }
 
@@ -244,14 +351,60 @@ export function fromProject(project: Project): SessionState {
 export type Migration = (raw: Record<string, unknown>) => Record<string, unknown>;
 
 /**
+ * Version 1 to 2: a project gains operating cases.
+ *
+ * Everything a v1 file said about the system was said once, at the top level,
+ * because there was only ever one system. That whole description — the
+ * airstreams, the chart view, and the hour filter — becomes the cooling case,
+ * and the file gains a second one only when the user builds it.
+ *
+ * The one thing that is not simply moved is `weather`. In v1 it carried the
+ * station *and* the hour filter in one object; in v2 those live at different
+ * levels, because every case reads the same file but looks at different hours.
+ * So it is split rather than relocated, and a v1 file with no weather at all
+ * produces neither half.
+ */
+const migrateV1ToV2: Migration = (raw) => {
+  const { airstreams, chart, weather, ...rest } = raw;
+  const source = isRecord(weather) ? weather : {};
+  const { station, ...view } = source;
+
+  const cooling: Record<string, unknown> = {
+    id: 'cooling',
+    role: 'cooling',
+    // A v1 file cannot have been a multi-airstream project in practice — the
+    // editor only ever wrote one — but the format allowed it, so carry
+    // whatever is there rather than reaching for [0].
+    airstreams: Array.isArray(airstreams) ? airstreams : [],
+  };
+  if (isRecord(chart)) cooling['chart'] = chart;
+  if (Object.keys(view).length > 0) cooling['weather'] = view;
+
+  const upgraded: Record<string, unknown> = {
+    ...rest,
+    schemaVersion: 2,
+    systems: [cooling],
+    activeSystem: 0,
+  };
+  if (isRecord(station)) upgraded['weather'] = { station };
+
+  return upgraded;
+};
+
+/**
  * Migrations, keyed by the version they upgrade **from**.
  *
- * Empty today. When version 2 arrives, `MIGRATIONS[1]` turns a v1 object into a
- * v2 object and `migrate` chains automatically — including across several
- * versions at once, which is the case that gets forgotten when this is written
- * later.
+ * `migrate` chains these automatically, including across several versions at
+ * once — the case that gets forgotten when a registry is written later, under
+ * the pressure of a format change that has already shipped.
  */
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  1: migrateV1ToV2,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export interface MigrationResult {
   readonly raw: unknown;

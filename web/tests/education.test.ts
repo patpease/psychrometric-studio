@@ -13,7 +13,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { AVAILABLE_STAGE_TYPES } from '../src/processes/registry.js';
-import { solveProject } from '../src/processes/chain.js';
+import { solveSystem } from '../src/processes/chain.js';
 import { standardAtmosphere } from '../src/psych/atmosphere.js';
 import { fromTdbRh } from '../src/psych/state.js';
 import { ICON_SOURCES, ICON_NAMES } from '../src/icons/generated.js';
@@ -30,7 +30,7 @@ const IP_PRESSURE = standardAtmosphere('IP').pressure;
 
 function solve(stages: Stage[], units: UnitSystem = 'IP') {
   const pressure = units === 'IP' ? IP_PRESSURE : standardAtmosphere('SI').pressure;
-  return solveProject(
+  return solveSystem(
     {
       schemaVersion: 1,
       units,

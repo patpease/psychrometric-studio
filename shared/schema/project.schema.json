@@ -1,29 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://psychro-studio.dev/schema/project-1.json",
+  "$id": "https://psychro-studio.dev/schema/project-2.json",
   "title": "Psychrometric Studio project",
   "description": "A saved project. Stores states as the user *declared* them rather than as solved values, so that reopening at a different site pressure re-solves instead of carrying stale properties.",
   "type": "object",
-  "required": ["schemaVersion", "units", "atmosphere", "airstreams"],
+  "required": ["schemaVersion", "units", "atmosphere", "systems"],
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
       "description": "Incremented on any breaking change to this format. Readers must refuse versions they do not understand rather than guessing.",
       "type": "integer",
-      "const": 1
+      "const": 2
     },
     "meta": { "$ref": "#/$defs/meta" },
     "units": { "$ref": "#/$defs/unitSystem" },
     "atmosphere": { "$ref": "#/$defs/atmosphere" },
-    "airstreams": {
-      "description": "One or more airstreams. A single-AHU study has one; energy recovery, indirect evaporative cooling, and mixing with a distinct source all use two or more. First-class from the outset so it never needs retrofitting.",
+    "systems": {
+      "description": "Operating cases. Normally two — a cooling case and a heating case — but the format does not cap the count, and nothing calculates from the role. Each carries its own equipment chain and its own view.",
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/airstream" }
+      "items": { "$ref": "#/$defs/system" }
     },
-    "chart": { "$ref": "#/$defs/chartSettings" },
+    "activeSystem": {
+      "description": "Index into systems of the case that was on screen. Advisory: a reader clamps it rather than trusting it, because a hand-edited file can point past the end.",
+      "type": "integer",
+      "minimum": 0
+    },
     "comfort": { "$ref": "#/$defs/comfortSettings" },
-    "weather": { "$ref": "#/$defs/weatherSettings" }
+    "weather": { "$ref": "#/$defs/weatherSource" }
   },
 
   "$defs": {
@@ -84,6 +88,34 @@
           "then": { "required": ["pressure"] }
         }
       ]
+    },
+
+    "system": {
+      "description": "One complete operating case. This sits above airstreams rather than beside them: an airstream is a parallel duct within one system and couplings resolve across them by id, whereas a system is an alternative operating state of the whole assembly.",
+      "type": "object",
+      "required": ["id", "role", "airstreams"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "role": {
+          "description": "What this case is for. Picks the default label and icon; nothing calculates from it, and the role 'other' exists because the cooling/heating pairing is a convention rather than a rule.",
+          "type": "string",
+          "enum": ["cooling", "heating", "other"]
+        },
+        "label": { "type": "string" },
+        "notes": {
+          "description": "Notes about this case. Project-wide notes live in meta, which is deliberately not duplicated per system: a client name copied into two places is a client name that will disagree with itself.",
+          "type": "string"
+        },
+        "airstreams": {
+          "description": "One or more airstreams. A single-AHU study has one; energy recovery, indirect evaporative cooling, and mixing with a distinct source all use two or more. First-class from the outset so it never needs retrofitting.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/airstream" }
+        },
+        "chart": { "$ref": "#/$defs/chartSettings" },
+        "weather": { "$ref": "#/$defs/weatherView" }
+      }
     },
 
     "airstream": {
@@ -279,8 +311,8 @@
       }
     },
 
-    "weatherSettings": {
-      "description": "How the weather overlay was configured. The EPW file itself is deliberately NOT stored: it is roughly 1.5 MB of text that would dominate the project file, it is redistributable only under the source's own terms, and it is reproducible from the station identity below. On load the tool names the station and asks for the file again.",
+    "weatherSource": {
+      "description": "Which weather file was used. The EPW itself is deliberately NOT stored: it is roughly 1.5 MB of text that would dominate the project file, it is redistributable only under the source's own terms, and it is reproducible from the station identity below. On load the tool names the station and asks for the file again. Project-level, because every system reads the same year.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -295,7 +327,15 @@
             "wmo": { "type": "string" },
             "elevation": { "type": "number" }
           }
-        },
+        }
+      }
+    },
+
+    "weatherView": {
+      "description": "Which hours of the weather file one system looks at. Per-system rather than shared: a heating case wants the heating months and a cooling case the cooling months, and re-picking the filter on every flip would make the second system a chore rather than a view.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
         "mode": { "type": "string", "enum": ["off", "scatter", "density"], "default": "off" },
         "months": {
           "description": "Months included, 1-12. Empty means all.",

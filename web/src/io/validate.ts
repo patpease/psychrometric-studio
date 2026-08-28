@@ -20,7 +20,12 @@
  * shape the solvers use, because a user who dragged in the wrong JSON needs a
  * sentence rather than a stack trace.
  */
-import { SCHEMA_VERSION, type Project, type StageType } from '../types/project.js';
+import {
+  defaultSystemLabel,
+  SCHEMA_VERSION,
+  type Project,
+  type StageType,
+} from '../types/project.js';
 
 export interface ValidationResult {
   readonly project: Project | null;
@@ -47,6 +52,7 @@ const STAGE_TYPES: readonly StageType[] = [
   'desiccant',
 ];
 
+const SYSTEM_ROLES: readonly string[] = ['cooling', 'heating', 'other'];
 const COUPLING_ROLES = ['second-stream', 'exchange-stream', 'secondary-stream', 'paired-leg'];
 const AIRSTREAM_ROLES = ['supply', 'return', 'outdoor', 'exhaust', 'secondary', 'other'];
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
@@ -113,115 +119,164 @@ export function validateProject(raw: unknown): ValidationResult {
     }
   }
 
-  const airstreams = raw['airstreams'];
-  if (!Array.isArray(airstreams) || airstreams.length === 0) {
-    problems.push('A project needs at least one airstream.');
+  const systems = raw['systems'];
+  if (!Array.isArray(systems) || systems.length === 0) {
+    problems.push('A project needs at least one system.');
   } else {
-    const seenStreamIds = new Set<string>();
+    const seenSystemIds = new Set<string>();
 
-    airstreams.forEach((stream, streamIndex) => {
-      const where = `Airstream ${streamIndex + 1}`;
-      if (!isRecord(stream)) {
-        problems.push(`${where} is not an object.`);
+    systems.forEach((system, systemIndex) => {
+      if (!isRecord(system)) {
+        problems.push(`System ${systemIndex + 1} is not an object.`);
         return;
       }
-      if (!validId(stream['id'])) {
-        problems.push(`${where} has a missing or invalid id.`);
-      } else if (seenStreamIds.has(stream['id'])) {
-        // Duplicate ids are worse than a missing one: couplings resolve by id,
-        // so a duplicate silently connects a stage to the wrong stream.
-        problems.push(`${where} repeats the id "${stream['id']}", which couplings resolve by.`);
+
+      const role = system['role'];
+      // Name it the way the interface would, so a complaint about a file names
+      // the case the user can actually see.
+      const named =
+        typeof system['label'] === 'string' && system['label'].trim().length > 0
+          ? system['label'].trim()
+          : defaultSystemLabel(systemIndex);
+
+      if (!validId(system['id'])) {
+        problems.push(`${named} has a missing or invalid id.`);
+      } else if (seenSystemIds.has(system['id'])) {
+        problems.push(`Two systems share the id "${system['id']}".`);
       } else {
-        seenStreamIds.add(stream['id']);
+        seenSystemIds.add(system['id']);
       }
-      if (typeof stream['name'] !== 'string') {
-        problems.push(`${where} has no name.`);
-      }
-      const role = stream['role'];
-      if (role !== undefined && (typeof role !== 'string' || !AIRSTREAM_ROLES.includes(role))) {
-        problems.push(`${where} has an unrecognised role "${String(role)}".`);
+      if (typeof role !== 'string' || !SYSTEM_ROLES.includes(role)) {
+        problems.push(`${named} has an unrecognised role "${String(role)}".`);
       }
 
-      const stages = stream['stages'];
-      if (!Array.isArray(stages)) {
-        problems.push(`${where} has no stage list.`);
+      const airstreams = system['airstreams'];
+      if (!Array.isArray(airstreams) || airstreams.length === 0) {
+        problems.push(`${named} needs at least one airstream.`);
         return;
       }
 
-      const seenStageIds = new Set<string>();
-      stages.forEach((stage, stageIndex) => {
-        const label = isRecord(stage) && typeof stage['name'] === 'string' ? `"${stage['name']}"` : `${stageIndex + 1}`;
-        const stageWhere = `${where}, stage ${label}`;
-        if (!isRecord(stage)) {
-          problems.push(`${stageWhere} is not an object.`);
+      // Airstream ids are scoped to their system, not to the file. Cooling and
+      // heating both having a stream called "supply" is the ordinary case, and
+      // a coupling in one must never resolve to the other's duct.
+      const seenStreamIds = new Set<string>();
+
+      airstreams.forEach((stream, streamIndex) => {
+        const where = `${named}, airstream ${streamIndex + 1}`;
+        if (!isRecord(stream)) {
+          problems.push(`${where} is not an object.`);
           return;
         }
-        if (!validId(stage['id'])) {
-          problems.push(`${stageWhere} has a missing or invalid id.`);
-        } else if (seenStageIds.has(stage['id'])) {
-          problems.push(`${stageWhere} repeats the id "${stage['id']}".`);
+        if (!validId(stream['id'])) {
+          problems.push(`${where} has a missing or invalid id.`);
+        } else if (seenStreamIds.has(stream['id'])) {
+          // Duplicate ids are worse than a missing one: couplings resolve by id,
+          // so a duplicate silently connects a stage to the wrong stream.
+          problems.push(`${where} repeats the id "${stream['id']}", which couplings resolve by.`);
         } else {
-          seenStageIds.add(stage['id']);
+          seenStreamIds.add(stream['id']);
         }
-        if (typeof stage['type'] !== 'string' || !STAGE_TYPES.includes(stage['type'] as StageType)) {
-          // Not fatal on its own — the chain solver reports an unknown type
-          // against that stage and still draws the rest — but it is worth
-          // saying plainly at load time rather than as five stage errors.
-          problems.push(
-            `${stageWhere} has type "${String(stage['type'])}", which this build does not model.`,
-          );
+        if (typeof stream['name'] !== 'string') {
+          problems.push(`${where} has no name.`);
         }
-        const airflow = stage['airflow'];
-        if (airflow !== undefined && (typeof airflow !== 'number' || !(airflow > 0))) {
-          problems.push(`${stageWhere} has an airflow that is not a positive number.`);
-        }
-        if (stage['params'] !== undefined && !isRecord(stage['params'])) {
-          problems.push(`${stageWhere} has parameters that are not an object.`);
+        const streamRole = stream['role'];
+        if (
+          streamRole !== undefined &&
+          (typeof streamRole !== 'string' || !AIRSTREAM_ROLES.includes(streamRole))
+        ) {
+          problems.push(`${where} has an unrecognised role "${String(streamRole)}".`);
         }
 
-        const couplings = stage['couplings'];
-        if (couplings !== undefined) {
-          if (!Array.isArray(couplings)) {
-            problems.push(`${stageWhere} has couplings that are not a list.`);
+        const stages = stream['stages'];
+        if (!Array.isArray(stages)) {
+          problems.push(`${where} has no stage list.`);
+          return;
+        }
+
+        const seenStageIds = new Set<string>();
+        stages.forEach((stage, stageIndex) => {
+          const label = isRecord(stage) && typeof stage['name'] === 'string' ? `"${stage['name']}"` : `${stageIndex + 1}`;
+          const stageWhere = `${where}, stage ${label}`;
+          if (!isRecord(stage)) {
+            problems.push(`${stageWhere} is not an object.`);
+            return;
+          }
+          if (!validId(stage['id'])) {
+            problems.push(`${stageWhere} has a missing or invalid id.`);
+          } else if (seenStageIds.has(stage['id'])) {
+            problems.push(`${stageWhere} repeats the id "${stage['id']}".`);
           } else {
-            couplings.forEach((coupling) => {
-              if (!isRecord(coupling)) {
-                problems.push(`${stageWhere} has a coupling that is not an object.`);
-                return;
-              }
-              if (typeof coupling['role'] !== 'string' || !COUPLING_ROLES.includes(coupling['role'])) {
-                problems.push(`${stageWhere} has a coupling with an unrecognised role.`);
-              }
-              if (!validId(coupling['airstreamId'])) {
-                problems.push(`${stageWhere} has a coupling with no airstream id.`);
-              }
-              if (coupling['stageId'] !== undefined && !validId(coupling['stageId'])) {
-                problems.push(`${stageWhere} has a coupling with an invalid stage id.`);
-              }
-            });
+            seenStageIds.add(stage['id']);
+          }
+          if (typeof stage['type'] !== 'string' || !STAGE_TYPES.includes(stage['type'] as StageType)) {
+            // Not fatal on its own — the chain solver reports an unknown type
+            // against that stage and still draws the rest — but it is worth
+            // saying plainly at load time rather than as five stage errors.
+            problems.push(
+              `${stageWhere} has type "${String(stage['type'])}", which this build does not model.`,
+            );
+          }
+          const airflow = stage['airflow'];
+          if (airflow !== undefined && (typeof airflow !== 'number' || !(airflow > 0))) {
+            problems.push(`${stageWhere} has an airflow that is not a positive number.`);
+          }
+          if (stage['params'] !== undefined && !isRecord(stage['params'])) {
+            problems.push(`${stageWhere} has parameters that are not an object.`);
+          }
+
+          const couplings = stage['couplings'];
+          if (couplings !== undefined) {
+            if (!Array.isArray(couplings)) {
+              problems.push(`${stageWhere} has couplings that are not a list.`);
+            } else {
+              couplings.forEach((coupling) => {
+                if (!isRecord(coupling)) {
+                  problems.push(`${stageWhere} has a coupling that is not an object.`);
+                  return;
+                }
+                if (typeof coupling['role'] !== 'string' || !COUPLING_ROLES.includes(coupling['role'])) {
+                  problems.push(`${stageWhere} has a coupling with an unrecognised role.`);
+                }
+                if (!validId(coupling['airstreamId'])) {
+                  problems.push(`${stageWhere} has a coupling with no airstream id.`);
+                }
+                if (coupling['stageId'] !== undefined && !validId(coupling['stageId'])) {
+                  problems.push(`${stageWhere} has a coupling with an invalid stage id.`);
+                }
+              });
+            }
+          }
+        });
+      });
+
+      // Couplings are checked for *resolvability* only after every id in this
+      // system is known, because a coupling may point forward to a stream
+      // declared later in the same system.
+      airstreams.forEach((stream) => {
+        if (!isRecord(stream) || !Array.isArray(stream['stages'])) return;
+        for (const stage of stream['stages']) {
+          if (!isRecord(stage) || !Array.isArray(stage['couplings'])) continue;
+          for (const coupling of stage['couplings']) {
+            if (!isRecord(coupling)) continue;
+            const target = coupling['airstreamId'];
+            if (typeof target === 'string' && !seenStreamIds.has(target)) {
+              problems.push(
+                `A stage in ${named} refers to airstream "${target}", which is not in that ` +
+                  'system. The reference will not resolve and that stage will not solve.',
+              );
+            }
           }
         }
       });
     });
 
-    // Couplings are checked for *resolvability* only after every id is known,
-    // because a coupling may point forward to a stream declared later.
-    airstreams.forEach((stream) => {
-      if (!isRecord(stream) || !Array.isArray(stream['stages'])) return;
-      for (const stage of stream['stages']) {
-        if (!isRecord(stage) || !Array.isArray(stage['couplings'])) continue;
-        for (const coupling of stage['couplings']) {
-          if (!isRecord(coupling)) continue;
-          const target = coupling['airstreamId'];
-          if (typeof target === 'string' && !seenStreamIds.has(target)) {
-            problems.push(
-              `A stage refers to airstream "${target}", which is not in this file. ` +
-                'The reference will not resolve and that stage will not solve.',
-            );
-          }
-        }
-      }
-    });
+    // Advisory rather than structural: a file that points past the end of its
+    // own list still contains every system, so refusing to open it would lose
+    // real work over a number the reader can simply clamp.
+    const active = raw['activeSystem'];
+    if (active !== undefined && (typeof active !== 'number' || !Number.isInteger(active) || active < 0)) {
+      problems.push('"activeSystem" must be a whole number, if present.');
+    }
   }
 
   return problems.length > 0 ? { project: null, problems } : { project: raw as unknown as Project, problems: [] };

@@ -38,11 +38,13 @@ import { ExportPanel } from './ExportPanel.js';
 import { AboutPanel } from './AboutPanel.js';
 import { setRescue } from '../io/rescue.js';
 import {
+  blankSystem,
   fromProject,
   readProject,
   toProject,
   writeProject,
   type SessionState,
+  type SessionSystem,
 } from '../io/project.js';
 import { readFragment } from '../io/url.js';
 import type { ProjectMeta } from '../types/project.js';
@@ -57,7 +59,7 @@ import {
   type ComfortSettingsState,
 } from './ComfortPanel.js';
 import { ResultsPanel } from './ResultsPanel.js';
-import { solveProject } from '../processes/chain.js';
+import { solveSystem } from '../processes/chain.js';
 import type { Stage } from '../types/project.js';
 import {
   formatTemperature,
@@ -71,30 +73,31 @@ import {
 } from './format.js';
 
 import type { PressureMode } from '../io/project.js';
+import type { EpwFile } from '../weather/epw.js';
+import { STARTER_COOLING, STARTER_HEATING } from './starters.js';
+import { SystemFlip } from './SystemFlip.js';
+import type { DesignDayKind } from '../weather/ddy.js';
+
+/** Selection and highlighting, per system. Session-only; never saved. */
+interface SystemUiState {
+  selectedStage: number | null;
+  selectedDesignDay: DesignDayKind | null;
+}
+
+const EMPTY_UI: SystemUiState = { selectedStage: null, selectedDesignDay: null };
 
 /**
- * The system shown on first load: a single-zone cooling application with
- * outdoor and return air mixed, a coil, fan heat, and a space load. It exists
- * so the tool opens showing what it does rather than an empty chart.
+ * The two cases a new project opens with.
  *
- * The airflows are chosen so the chain **closes**: 500 CFM of outdoor air and
- * 1,500 of return, through a 54 °F coil, land the zone back at 75.7 °F and
- * 49.7% RH — the condition the return air was declared at. An opening example
- * that does not close its own loop teaches the wrong thing on first contact,
- * and it is also the system the walkthrough builds, step by step.
+ * Both are built rather than left empty: a heating case that starts blank
+ * teaches nothing on the first flip, and the point of the second page is to
+ * show that the same equipment reads differently in winter.
  */
-const STARTER_SYSTEM: Stage[] = [
-  { id: 'oa', type: 'source', name: 'Outdoor air', airflow: 500, params: { tdb: 95, rh: 0.4 } },
-  {
-    id: 'mx',
-    type: 'mixing',
-    name: 'Mixing box',
-    params: { airflow2: 1500, tdb2: 75, rh2: 0.5 },
-  },
-  { id: 'cc', type: 'cooling', name: 'Cooling coil', params: { tdbOut: 54, rhOut: 0.93 } },
-  { id: 'sf', type: 'fan', name: 'Supply fan', params: { power: 1.5, motorInAirstream: true } },
-  { id: 'rm', type: 'room', name: 'Zone', params: { sensible: 42, latent: 11 } },
-];
+function starterSystems(units: UnitSystem): SessionSystem[] {
+  const cooling = blankSystem('cooling', units, [...STARTER_COOLING]);
+  const heating = blankSystem('heating', units, [...STARTER_HEATING]);
+  return [cooling, heating];
+}
 
 /** Track the element's size so the chart fills the space it is given. */
 function useElementSize(): [React.RefObject<HTMLDivElement | null>, { width: number; height: number }] {
@@ -119,16 +122,172 @@ function useElementSize(): [React.RefObject<HTMLDivElement | null>, { width: num
 
 export function App(): React.JSX.Element {
   const [units, setUnits] = useState<UnitSystem>('IP');
-  const [domain, setDomain] = useState<ChartDomain>(() => defaultDomain('IP'));
   const [pressureMode, setPressureMode] = useState<PressureMode>('sea-level');
   const [altitude, setAltitude] = useState(0);
   const [explicitPressure, setExplicitPressure] = useState('');
-  const [visibility, setVisibility] = useState<Record<FamilyKey, boolean>>(DEFAULT_VISIBILITY);
-  const [showProtractor, setShowProtractor] = useState(false);
-  const [stages, setStages] = useState<Stage[]>(() => STARTER_SYSTEM);
-  const [selectedStage, setSelectedStage] = useState<number | null>(null);
   const [comfort, setComfort] = useState<ComfortSettingsState>(() => defaultComfortSettings('IP'));
-  const [weather, setWeather] = useState<WeatherState>(initialWeatherState);
+
+  /**
+   * The operating cases, and which one is on screen.
+   *
+   * A project holds a cooling case and a heating case. They are separate
+   * definitions of the same physical system, not two views of one — each has
+   * its own equipment chain, its own chart view, and its own weather filter.
+   * Everything below that is shared sits outside this array: one site, one set
+   * of occupants, one weather file.
+   */
+  const [systems, setSystems] = useState<SessionSystem[]>(() => starterSystems('IP'));
+  const [activeSystem, setActiveSystem] = useState(0);
+  const current = systems[activeSystem] ?? systems[0]!;
+  const { stages, domain, visibility, showProtractor } = current;
+
+  /** The loaded weather file. Shared: both cases read the same year. */
+  const [weatherFile, setWeatherFile] = useState<EpwFile | null>(null);
+  /** Selection and highlight, per system, kept out of the saved project. */
+  const [systemUi, setSystemUi] = useState<Record<string, SystemUiState>>({});
+  const ui = systemUi[current.id] ?? EMPTY_UI;
+  const selectedStage = ui.selectedStage;
+
+  /**
+   * Which case a write lands on, in a ref rather than a closure.
+   *
+   * This is deliberate and load-bearing. The setters below used to be plain
+   * `useState` setters, whose identity never changes, so callers could hold on
+   * to one forever — several do, with an empty dependency array. Rebuilding
+   * them on every flip would leave those callers holding a setter bound to
+   * whichever case was open when they were created, and writes would land on
+   * the wrong page: a click that never registers, or worse, a drag on the
+   * heating chart that silently edits the cooling chain.
+   *
+   * Reading the target through a ref keeps the setters' identity stable, so
+   * that whole class of bug cannot come back the next time someone writes a
+   * callback here. The tradeoff is the usual one for refs — these must not be
+   * read during render, only inside an event or an updater.
+   */
+  const activeRef = useRef(activeSystem);
+  activeRef.current = activeSystem;
+  const activeIdRef = useRef(current.id);
+  activeIdRef.current = current.id;
+
+  /**
+   * Setters that write through to the active system.
+   *
+   * These keep the signatures the rest of the component already uses, including
+   * functional updates, so that moving four pieces of state into the systems
+   * array did not become forty edits at the call sites — each of which would
+   * have been a chance to write to the wrong case.
+   */
+  const patchActive = useCallback((patch: (system: SessionSystem) => SessionSystem): void => {
+    setSystems((previous) =>
+      previous.map((system, index) => (index === activeRef.current ? patch(system) : system)),
+    );
+  }, []);
+
+  const setStages = useCallback(
+    (value: React.SetStateAction<Stage[]>): void => {
+      patchActive((system) => ({
+        ...system,
+        stages: typeof value === 'function' ? value(system.stages) : value,
+      }));
+    },
+    [patchActive],
+  );
+
+  const setDomain = useCallback(
+    (value: React.SetStateAction<ChartDomain>): void => {
+      patchActive((system) => ({
+        ...system,
+        domain: typeof value === 'function' ? value(system.domain) : value,
+      }));
+    },
+    [patchActive],
+  );
+
+  const setVisibility = useCallback(
+    (value: React.SetStateAction<Record<FamilyKey, boolean>>): void => {
+      patchActive((system) => ({
+        ...system,
+        visibility: typeof value === 'function' ? value(system.visibility) : value,
+      }));
+    },
+    [patchActive],
+  );
+
+  const setShowProtractor = useCallback(
+    (value: React.SetStateAction<boolean>): void => {
+      patchActive((system) => ({
+        ...system,
+        showProtractor: typeof value === 'function' ? value(system.showProtractor) : value,
+      }));
+    },
+    [patchActive],
+  );
+
+  const setSelectedStage = useCallback((value: React.SetStateAction<number | null>): void => {
+    const id = activeIdRef.current;
+    setSystemUi((previous) => {
+      const entry = previous[id] ?? EMPTY_UI;
+      return {
+        ...previous,
+        [id]: {
+          ...entry,
+          selectedStage: typeof value === 'function' ? value(entry.selectedStage) : value,
+        },
+      };
+    });
+  }, []);
+
+  /**
+   * The weather panel still sees one object, assembled from the shared file and
+   * this system's filter. Splitting it here rather than in the panel keeps the
+   * panel unaware that there is more than one system to filter for.
+   */
+  const weather: WeatherState = useMemo(
+    () => ({
+      file: weatherFile,
+      mode: current.weather.mode ?? 'off',
+      filter: {
+        months: current.weather.months ?? [],
+        hours: current.weather.hours ?? [],
+      },
+      presetIndex: current.weather.presetIndex ?? 0,
+      selectedDesignDay: ui.selectedDesignDay,
+    }),
+    [weatherFile, current.weather, ui.selectedDesignDay],
+  );
+
+  /**
+   * Put an updated weather state back where its parts belong.
+   *
+   * The file goes to the shared slot, the hour filter to this system, and the
+   * highlighted design day to the session-only record. The functional form
+   * reads from this render's assembled state rather than from an updater
+   * queue: every caller passes a whole object built from what it can see, and
+   * none of them queue two updates in one tick.
+   */
+  const setWeather = useCallback(
+    (value: React.SetStateAction<WeatherState>): void => {
+      const next = typeof value === 'function' ? value(weather) : value;
+      if (next.file !== weatherFile) setWeatherFile(next.file);
+      patchActive((system) => ({
+        ...system,
+        weather: {
+          mode: next.mode,
+          months: [...next.filter.months],
+          hours: [...next.filter.hours],
+          presetIndex: next.presetIndex,
+        },
+      }));
+      setSystemUi((previous) => {
+        const entry = previous[current.id] ?? EMPTY_UI;
+        return {
+          ...previous,
+          [current.id]: { ...entry, selectedDesignDay: next.selectedDesignDay },
+        };
+      });
+    },
+    [weather, weatherFile, patchActive, current.id],
+  );
   /**
    * A topic the user navigated to by clicking a term, which overrides the
    * selected component until they go back. Without it, opening "bypass factor"
@@ -185,13 +344,21 @@ export function App(): React.JSX.Element {
     const from = units;
     if (from === next) return;
 
-    setStages((current) => convertStages(current, from, next));
+    // Every system converts, not just the one on screen. Converting only the
+    // active case would leave the other one holding °F values under an SI
+    // label — numbers that still solve, and are wrong by a factor nobody would
+    // notice until the chart was read.
+    setSystems((current) =>
+      current.map((system) => ({
+        ...system,
+        stages: convertStages(system.stages, from, next),
+        domain: defaultDomain(next),
+      })),
+    );
     setComfort((current) => convertComfort(current, from, next));
     // Weather hours are stored in the display system too, so they convert with
     // everything else rather than being silently reinterpreted.
-    setWeather((current) =>
-      current.file ? { ...current, file: convertHoursTo(current.file, next) } : current,
-    );
+    setWeatherFile((current) => (current ? convertHoursTo(current, next) : current));
     setAltitude((current) => convertAltitude(current, from, next));
     setExplicitPressure((current) => {
       const parsed = Number.parseFloat(current);
@@ -201,7 +368,6 @@ export function App(): React.JSX.Element {
     });
 
     setUnits(next);
-    setDomain(defaultDomain(next));
   };
 
   /**
@@ -240,13 +406,8 @@ export function App(): React.JSX.Element {
    */
   const solved = useMemo(
     () =>
-      solveProject(
-        {
-          schemaVersion: 1,
-          units,
-          atmosphere: { basis: 'standard' },
-          airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages }],
-        },
+      solveSystem(
+        { airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages }] },
         atmosphere.pressure,
         units,
       ),
@@ -326,6 +487,19 @@ export function App(): React.JSX.Element {
     [atmosphere.pressure, units],
   );
 
+  /**
+   * Turn to another operating case.
+   *
+   * The hover readout is cleared because it describes a point on the page being
+   * turned away from; carrying it across would label the new chart with the old
+   * chart's numbers. Selection is *not* cleared — it is kept per system, so
+   * turning back finds the component you were reading.
+   */
+  const flipTo = useCallback((index: number): void => {
+    setActiveSystem(index);
+    setTopicOverride(null);
+  }, []);
+
   const interaction = useChartInteraction({
     domain,
     limits,
@@ -350,42 +524,32 @@ export function App(): React.JSX.Element {
   const session: SessionState = useMemo(
     () => ({
       units,
-      domain,
       pressureMode,
       altitude,
       explicitPressure,
-      stages,
-      visibility,
-      showProtractor,
+      systems,
+      activeSystem,
       comfort,
-      weather: weather.file
+      station: weatherFile
         ? {
-            station: {
-              city: weather.file.location.city,
-              state: weather.file.location.state,
-              country: weather.file.location.country,
-              wmo: weather.file.location.wmo,
-              elevation: weather.file.location.elevation,
-            },
-            mode: weather.mode,
-            months: [...weather.filter.months],
-            hours: [...weather.filter.hours],
-            presetIndex: weather.presetIndex,
+            city: weatherFile.location.city,
+            state: weatherFile.location.state,
+            country: weatherFile.location.country,
+            wmo: weatherFile.location.wmo,
+            elevation: weatherFile.location.elevation,
           }
         : null,
       meta,
     }),
     [
       units,
-      domain,
       pressureMode,
       altitude,
       explicitPressure,
-      stages,
-      visibility,
-      showProtractor,
+      systems,
+      activeSystem,
       comfort,
-      weather,
+      weatherFile,
       meta,
     ],
   );
@@ -407,18 +571,16 @@ export function App(): React.JSX.Element {
 
     const next = fromProject(result.project);
     setUnits(next.units);
-    setDomain(next.domain);
     setPressureMode(next.pressureMode);
     setAltitude(next.altitude);
     setExplicitPressure(next.explicitPressure);
-    setStages(next.stages);
-    setVisibility(next.visibility);
-    setShowProtractor(next.showProtractor);
+    setSystems(next.systems);
+    setActiveSystem(next.activeSystem);
     setComfort(next.comfort);
     setMeta(next.meta);
     // Session state, deliberately reset: a reopened project starts with nothing
-    // selected and no walkthrough running.
-    setSelectedStage(null);
+    // selected, no design day lit, and no walkthrough running.
+    setSystemUi({});
     setTopicOverride(null);
     setWalkthroughStep(null);
 
@@ -432,10 +594,8 @@ export function App(): React.JSX.Element {
     // The weather file is named but never carried — see the schema. Saying so
     // is the difference between "the overlay is missing" and "the overlay needs
     // its file back".
-    if (next.weather?.station?.city) {
-      const station = [next.weather.station.city, next.weather.station.country]
-        .filter(Boolean)
-        .join(', ');
+    if (next.station?.city) {
+      const station = [next.station.city, next.station.country].filter(Boolean).join(', ');
       notes.push(
         `This project used weather data for ${station}. Weather files are not ` +
           'stored in a project — load the EPW again to restore the overlay.',
@@ -598,6 +758,7 @@ export function App(): React.JSX.Element {
           onPointerUp={interaction.onPointerUp}
           onPointerLeave={interaction.onPointerLeave}
         >
+          <SystemFlip systems={systems} activeSystem={activeSystem} onFlip={flipTo} />
           <WeatherLayer
             hours={weather.file?.hours ?? []}
             mode={weather.mode}

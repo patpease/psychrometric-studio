@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  solveProject,
+  solveSystem,
   checkEnergyBalance,
   systemTotals,
   splitDuty,
@@ -18,23 +18,21 @@ import {
 } from '../src/processes/index.js';
 import { fromTdbRh, fromTdbW } from '../src/psych/state.js';
 import { DEFAULTS, massFlow as massFlowFrom, type UnitSystem } from '../src/psych/units.js';
-import type { Project, Stage } from '../src/types/project.js';
+import type { Airstream, Stage, SystemDefinition } from '../src/types/project.js';
 
 const IP_PRESSURE = DEFAULTS.IP.standardPressure;
 const SI_PRESSURE = DEFAULTS.SI.standardPressure;
 
-function project(stages: Stage[], units: UnitSystem = 'IP', extra: Project['airstreams'] = []): Project {
+/** The solver takes one system, so a test needs airstreams and nothing else. */
+function system(stages: Stage[], extra: Airstream[] = []): Pick<SystemDefinition, 'airstreams'> {
   return {
-    schemaVersion: 1,
-    units,
-    atmosphere: { basis: 'standard' },
     airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages }, ...extra],
   };
 }
 
 function solveOne(stages: Stage[], units: UnitSystem = 'IP') {
   const pressure = units === 'IP' ? IP_PRESSURE : SI_PRESSURE;
-  return solveProject(project(stages, units), pressure, units);
+  return solveSystem(system(stages), pressure, units);
 }
 
 /** Fail loudly with the stage's own message rather than on an undefined deref. */
@@ -290,11 +288,8 @@ describe('mixing', () => {
   });
 
   it('takes its second stream from a coupled airstream', () => {
-    const solved = solveProject(
+    const solved = solveSystem(
       {
-        schemaVersion: 1,
-        units: 'IP',
-        atmosphere: { basis: 'standard' },
         airstreams: [
           {
             id: 'supply',
@@ -666,11 +661,8 @@ describe('failure handling', () => {
   });
 
   it('detects a circular coupling between airstreams', () => {
-    const solved = solveProject(
+    const solved = solveSystem(
       {
-        schemaVersion: 1,
-        units: 'IP',
-        atmosphere: { basis: 'standard' },
         airstreams: [
           {
             id: 'a',
@@ -708,11 +700,8 @@ describe('failure handling', () => {
   });
 
   it('names a coupling to an airstream that does not exist', () => {
-    const solved = solveProject(
+    const solved = solveSystem(
       {
-        schemaVersion: 1,
-        units: 'IP',
-        atmosphere: { basis: 'standard' },
         airstreams: [
           {
             id: 'a',

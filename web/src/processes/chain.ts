@@ -13,7 +13,7 @@
 import type { MoistAirState } from '../psych/state.js';
 import type { UnitSystem } from '../psych/units.js';
 import { duty as dutyFromEnthalpy } from '../psych/units.js';
-import type { Airstream, Project, Stage } from '../types/project.js';
+import type { Airstream, Stage, SystemDefinition } from '../types/project.js';
 import { MODELS } from './registry.js';
 import type { CouplingRole } from '../types/project.js';
 import { ProcessError, type DutySplit, type StageResult } from './types.js';
@@ -45,7 +45,7 @@ export interface SolvedAirstream {
   readonly terminalMassFlow: number | null;
 }
 
-export interface SolvedProject {
+export interface SolvedSystem {
   readonly airstreams: readonly SolvedAirstream[];
   readonly units: UnitSystem;
   readonly pressure: number;
@@ -263,13 +263,21 @@ function solveAirstream(
   };
 }
 
-/** Solve every airstream in a project. */
-export function solveProject(
-  project: Project,
+/**
+ * Solve every airstream in one system.
+ *
+ * Scoped to a single system rather than to the whole project, because couplings
+ * resolve by airstream id and ids are per-system. Cooling and heating both
+ * having a "return" stream is the ordinary case, and a mixing box in one must
+ * never reach into the other. Solving a project therefore means calling this
+ * once per system rather than widening the id space.
+ */
+export function solveSystem(
+  system: Pick<SystemDefinition, 'airstreams'>,
   pressure: number,
   units: UnitSystem,
-): SolvedProject {
-  const { order, errors } = orderAirstreams(project.airstreams);
+): SolvedSystem {
+  const { order, errors } = orderAirstreams(system.airstreams);
   const resolved = new Map<string, ResolvedAirstream>();
   const results = new Map<string, SolvedAirstream>();
 
@@ -306,9 +314,9 @@ export function solveProject(
   }
 
   return {
-    // Return in the project's own order, not the solve order — the UI should
+    // Return in the system's own order, not the solve order — the UI should
     // show the airstreams where the user put them.
-    airstreams: project.airstreams.map((stream) => results.get(stream.id)!).filter(Boolean),
+    airstreams: system.airstreams.map((stream) => results.get(stream.id)!).filter(Boolean),
     units,
     pressure,
     errors,

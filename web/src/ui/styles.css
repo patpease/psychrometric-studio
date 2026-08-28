@@ -2189,3 +2189,105 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+
+/* -------------------------------------------------------------------------- *
+ * The page corner that turns to the other operating case
+ * -------------------------------------------------------------------------- */
+
+/**
+ * A turned corner, drawn in the top-left of the chart.
+ *
+ * One triangle: the page showing through behind the sheet. It is a plain border
+ * on a zero-sized box, which is how a triangle is drawn without an image — so
+ * the whole affordance costs no request and follows the theme like everything
+ * else.
+ *
+ * The label sits outside the corner rather than on it. Text on a 45° wedge is
+ * unreadable at any size that fits, and the corner's job is to say "there is
+ * something behind this", not to carry the whole message.
+ */
+.system-flip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  /* The chart beneath is grabbable for panning; this is not part of that. */
+  touch-action: manipulation;
+}
+
+.system-flip-fold {
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  transition: width 0.14s ease, height 0.14s ease;
+}
+
+/* The page behind, revealed by the turn. */
+.system-flip-fold::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-width: 22px 22px 0 0;
+  border-style: solid;
+  border-color: var(--accent-bright) transparent transparent transparent;
+  transition: border-width 0.14s ease;
+}
+
+.system-flip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 1px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  pointer-events: none;
+}
+
+/* Lift the corner further on approach, and name where it goes. */
+.system-flip:hover .system-flip-fold,
+.system-flip:focus-visible .system-flip-fold {
+  width: 30px;
+  height: 30px;
+}
+
+.system-flip:hover .system-flip-fold::after,
+.system-flip:focus-visible .system-flip-fold::after {
+  border-width: 30px 30px 0 0;
+}
+
+.system-flip:hover .system-flip-label,
+.system-flip:focus-visible .system-flip-label {
+  opacity: 1;
+  transform: none;
+  color: var(--ink);
+}
+
+.system-flip:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Someone who has asked for less motion still needs the affordance, so the
+   corner keeps its hover state and only stops animating into it. */
+@media (prefers-reduced-motion: reduce) {
+  .system-flip-fold,
+  .system-flip-fold::after,
+  .system-flip-label {
+    transition: none;
+  }
+}

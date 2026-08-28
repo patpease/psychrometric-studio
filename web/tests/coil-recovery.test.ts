@@ -8,24 +8,19 @@
  */
 import { describe, it, expect } from 'vitest';
 import { solveCoil, leavingFromAdp } from '../src/processes/coil.js';
-import { solveProject, MODELS } from '../src/processes/index.js';
+import { solveSystem, MODELS } from '../src/processes/index.js';
 import { fromTdbRh } from '../src/psych/state.js';
 import { lib } from '../src/psych/psychrolib.js';
 import { DEFAULTS, duty as dutyOf, type UnitSystem } from '../src/psych/units.js';
-import type { Project, Stage } from '../src/types/project.js';
+import type { Airstream, Stage } from '../src/types/project.js';
 
 const IP = DEFAULTS.IP.standardPressure;
 const SI = DEFAULTS.SI.standardPressure;
 
-function solveOne(stages: Stage[], units: UnitSystem = 'IP', extra: Project['airstreams'] = []) {
+function solveOne(stages: Stage[], units: UnitSystem = 'IP', extra: Airstream[] = []) {
   const pressure = units === 'IP' ? IP : SI;
-  return solveProject(
-    {
-      schemaVersion: 1,
-      units,
-      atmosphere: { basis: 'standard' },
-      airstreams: [{ id: 'supply', name: 'Supply', stages }, ...extra],
-    },
+  return solveSystem(
+    { airstreams: [{ id: 'supply', name: 'Supply', stages }, ...extra] },
     pressure,
     units,
   );
@@ -206,7 +201,7 @@ describe('cooling coil reports its construction', () => {
 });
 
 describe('energy recovery', () => {
-  const EXHAUST: Project['airstreams'] = [
+  const EXHAUST: Airstream[] = [
     {
       id: 'exhaust',
       name: 'Exhaust',
@@ -334,7 +329,7 @@ describe('energy recovery', () => {
   it('limits effectiveness by the smaller airflow', () => {
     // Half the exhaust air can only carry half the exchange. Using the supply
     // flow would credit the wheel with more than the exhaust had to give.
-    const halfExhaust: Project['airstreams'] = [
+    const halfExhaust: Airstream[] = [
       {
         id: 'exhaust',
         name: 'Exhaust',
