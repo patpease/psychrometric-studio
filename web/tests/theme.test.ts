@@ -84,3 +84,40 @@ describe('the light palette', () => {
     expect(missing, 'defined only in dark; will fall back to an initial value').toEqual([]);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+describe('the page turn respects a request for less motion', () => {
+  /**
+   * Someone who has asked their system for reduced motion should still be able
+   * to change operating cases — what they have asked to be spared is half a
+   * second of rotation, not the change of state itself.
+   *
+   * This is asserted because it is the kind of rule that is silently lost: it
+   * only affects users the developer is usually not one of, so nothing on
+   * screen ever looks wrong when it goes missing.
+   */
+  const reduced = css.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/g) ?? [];
+
+  it('turns off the sheet transition', () => {
+    const block = reduced.find((b) => b.includes('.chart-sheet'));
+    expect(block, 'no reduced-motion rule covers .chart-sheet').toBeDefined();
+    expect(block).toMatch(/transition:\s*none/);
+  });
+
+  it('removes the motion without removing the turn', () => {
+    // A `display: none` or a suppressed transform would leave the reader on a
+    // chart that never changes. Only the transition may be touched.
+    for (const block of reduced) {
+      expect(block).not.toMatch(/display:\s*none/);
+      expect(block).not.toMatch(/transform:\s*none/);
+    }
+  });
+
+  it('keeps the corner visible when it stops animating', () => {
+    // The affordance still has to be there; only its easing goes away.
+    const block = reduced.find((b) => b.includes('.system-flip'));
+    expect(block).toBeDefined();
+    expect(block).not.toMatch(/opacity:\s*0/);
+  });
+});

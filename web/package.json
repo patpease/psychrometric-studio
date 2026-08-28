@@ -12,7 +12,8 @@
     "verify:vendor": "../scripts/vendor-psychrolib.sh",
     "build:icons": "node scripts/build-icons.mjs",
     "build:notices": "node scripts/collect-licences.mjs",
-    "preview:worker": "npm run build && wrangler dev --port 8788 --local"
+    "preview:worker": "npm run build && wrangler dev --port 8788 --local",
+    "preview": "vite preview --port 4183 --strictPort"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",

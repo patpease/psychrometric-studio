@@ -73,10 +73,10 @@ import {
 } from './format.js';
 
 import type { PressureMode } from '../io/project.js';
-import type { EpwFile } from '../weather/epw.js';
+import type { EpwFile, WeatherHour } from '../weather/epw.js';
 import { STARTER_COOLING, STARTER_HEATING } from './starters.js';
 import { SystemFlip } from './SystemFlip.js';
-import type { DesignDayKind } from '../weather/ddy.js';
+import type { DesignDay, DesignDayKind } from '../weather/ddy.js';
 
 /** Selection and highlighting, per system. Session-only; never saved. */
 interface SystemUiState {
@@ -85,6 +85,16 @@ interface SystemUiState {
 }
 
 const EMPTY_UI: SystemUiState = { selectedStage: null, selectedDesignDay: null };
+
+/**
+ * Stand-ins for "nothing loaded", shared rather than written inline.
+ *
+ * `?? []` reads as free and is not: it builds a new array on every render, and
+ * a memoised child comparing props shallowly would see a changed prop every
+ * time and re-render anyway. One frozen empty array is the same value forever.
+ */
+const NO_HOURS: readonly WeatherHour[] = Object.freeze([]);
+const NO_DESIGN_DAYS: readonly DesignDay[] = Object.freeze([]);
 
 /**
  * The two cases a new project opens with.
@@ -404,16 +414,27 @@ export function App(): React.JSX.Element {
    * stale — and it means a change can never leave a downstream state showing a
    * value from before the edit.
    */
-  const solved = useMemo(
+  /**
+   * Every case is solved, not only the one on screen.
+   *
+   * Both are drawn during a page turn, so both need their chains. Solving the
+   * pair costs a handful of closed-form evaluations more than solving one, and
+   * it removes the alternative — solving the far side lazily, which would make
+   * the first frame of every turn the one frame that has no chart on it.
+   */
+  const solvedSystems = useMemo(
     () =>
-      solveSystem(
-        { airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages }] },
-        atmosphere.pressure,
-        units,
+      systems.map((system) =>
+        solveSystem(
+          { airstreams: [{ id: 'supply', name: 'Supply air', role: 'supply', stages: system.stages }] },
+          atmosphere.pressure,
+          units,
+        ),
       ),
-    [stages, units, atmosphere.pressure],
+    [systems, units, atmosphere.pressure],
   );
 
+  const solved = solvedSystems[activeSystem] ?? solvedSystems[0]!;
   const supply = solved.airstreams[0]!;
 
   /**
@@ -645,6 +666,72 @@ export function App(): React.JSX.Element {
     setTopicOverride(null);
   }, []);
 
+  /**
+   * Which cases are drawn, and whether they can turn between each other.
+   *
+   * The page turn is a two-sided sheet, so it only describes two cases. The
+   * format permits more, and if a project ever holds them the extra cases still
+   * work — they just arrive without the animation rather than arriving wrong.
+   */
+  const canTurn = systems.length === 2;
+  const faces = canTurn ? [0, 1] : [activeSystem];
+
+  /**
+   * One face of the sheet.
+   *
+   * The far side is drawn in full — same chart, same overlays — because the
+   * whole point of a turn is that there is something already there behind the
+   * page. What it does not get is anything interactive: no hover readout, no
+   * click targets, and not the export ref, so that a chart hidden behind
+   * another cannot answer for the one on screen.
+   */
+  function renderFace(index: number): React.JSX.Element {
+    const system = systems[index]!;
+    const live = index === activeSystem;
+    const ui = systemUi[system.id] ?? EMPTY_UI;
+
+    return (
+      <div
+        key={system.id}
+        className={`chart-face${live ? ' live' : ''}`}
+        aria-hidden={!live}
+        inert={!live}
+      >
+        <WeatherLayer
+          hours={weatherFile?.hours ?? NO_HOURS}
+          mode={system.weather.mode ?? 'off'}
+          domain={system.domain}
+          width={size.width}
+          height={size.height}
+          dark={dark}
+        />
+        <Chart
+          domain={system.domain}
+          pressure={atmosphere.pressure}
+          units={units}
+          width={size.width}
+          height={size.height}
+          visibility={system.visibility}
+          showProtractor={system.showProtractor}
+          hover={live ? hover : null}
+          solved={solvedSystems[index]?.airstreams[0]}
+          selectedStage={ui.selectedStage}
+          onSelectStage={live ? selectStage : undefined}
+          onDragState={live ? dragSource : undefined}
+          comfortZones={zones}
+          designDays={weatherFile?.design?.days ?? NO_DESIGN_DAYS}
+          selectedDesignDay={ui.selectedDesignDay}
+          onSelectDesignDay={
+            live
+              ? (kind) => setWeather((current) => ({ ...current, selectedDesignDay: kind }))
+              : undefined
+          }
+          exportRef={live ? chartRef : undefined}
+        />
+      </div>
+    );
+  }
+
   return (
     <EducationContext.Provider value={{ openTopic: setTopicOverride }}>
     <div className="app">
@@ -758,34 +845,16 @@ export function App(): React.JSX.Element {
           onPointerUp={interaction.onPointerUp}
           onPointerLeave={interaction.onPointerLeave}
         >
+          {/* Outside the turning sheet: a control that flipped with the page
+              would face away from the reader exactly when it was needed. */}
           <SystemFlip systems={systems} activeSystem={activeSystem} onFlip={flipTo} />
-          <WeatherLayer
-            hours={weather.file?.hours ?? []}
-            mode={weather.mode}
-            domain={domain}
-            width={size.width}
-            height={size.height}
-            dark={dark}
-          />
-          <Chart
-            domain={domain}
-            pressure={atmosphere.pressure}
-            units={units}
-            width={size.width}
-            height={size.height}
-            visibility={visibility}
-            showProtractor={showProtractor}
-            hover={hover}
-            solved={supply}
-            selectedStage={selectedStage}
-            onSelectStage={selectStage}
-            onDragState={dragSource}
-            comfortZones={zones}
-            designDays={weather.file?.design?.days ?? []}
-            selectedDesignDay={weather.selectedDesignDay}
-            onSelectDesignDay={(kind) => setWeather((current) => ({ ...current, selectedDesignDay: kind }))}
-            exportRef={chartRef}
-          />
+
+          <div
+            className={`chart-sheet${canTurn ? ' can-turn' : ''}${activeSystem === 1 ? ' turned' : ''}`}
+          >
+            {faces.map((index) => renderFace(index))}
+          </div>
+
           <p className="chart-hint">Scroll to zoom · drag to pan</p>
         </div>
 

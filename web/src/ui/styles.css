@@ -2291,3 +2291,79 @@ body {
     transition: none;
   }
 }
+
+/* -------------------------------------------------------------------------- *
+ * Turning the chart to the other operating case
+ * -------------------------------------------------------------------------- */
+
+/**
+ * A two-sided sheet, turned about its vertical axis.
+ *
+ * Both faces stay mounted. The far one is a whole chart — its own chain, its
+ * own view, its own weather — because the point of a turn is that something is
+ * already there behind the page, and building it during the animation would
+ * make the first frame the one frame with nothing on it. It costs about 260
+ * SVG nodes, which is why this is affordable rather than clever.
+ *
+ * The back face carries its own `rotateY(180deg)`. That is what keeps the
+ * chart from reading mirrored when the sheet is turned: the face's rotation
+ * and the sheet's cancel out, leaving the drawing the right way round while
+ * the sheet itself has genuinely turned over.
+ */
+.chart-sheet {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.42, 0.05, 0.25, 1);
+}
+
+/* Perspective belongs to the container the sheet turns inside, not the sheet:
+   applied to the sheet it would be recomputed per face and the two halves of
+   the turn would not meet. */
+.chart-pane {
+  perspective: 2200px;
+}
+
+.chart-sheet.turned {
+  transform: rotateY(-180deg);
+}
+
+.chart-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  /* Safari still wants the prefixed form to hide a turned-away face. */
+  -webkit-backface-visibility: hidden;
+}
+
+.chart-face + .chart-face {
+  transform: rotateY(180deg);
+}
+
+/* The face turned away takes no input. `backface-visibility` hides it, but a
+   hidden element can still be the target of a click in some engines, and a
+   chart answering for the one in front of it is the kind of bug that looks
+   like the numbers are wrong. */
+.chart-face:not(.live) {
+  pointer-events: none;
+}
+
+/* A sheet with only one side — a project with some other number of cases —
+   must not sit under a perspective it never uses. */
+.chart-sheet:not(.can-turn) {
+  transform: none;
+  transition: none;
+}
+
+/**
+ * Reduced motion: turn the page instantly rather than not at all.
+ *
+ * The two cases are still two pages, and the reader still has to know the
+ * chart changed. What is removed is the half-second of rotation, not the
+ * change of state — so the swap happens, it simply happens at once.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .chart-sheet {
+    transition: none;
+  }
+}

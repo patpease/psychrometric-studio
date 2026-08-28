@@ -8,7 +8,7 @@
  * emitting SVG directly means vector export in Phase 7 is a DOM serialisation
  * rather than a second rendering path.
  */
-import { useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import type { ChartDomain, ChartScales, DataPoint } from './scales.js';
 import { createScales, niceTicks } from './scales.js';
 import {
@@ -47,7 +47,7 @@ export interface ChartProps {
   /** The solved process chain to draw over the chart, if any. */
   solved?: SolvedAirstream | undefined;
   selectedStage?: number | null;
-  onSelectStage?: (index: number | null) => void;
+  onSelectStage?: ((index: number | null) => void) | undefined;
   onDragState?: ((stageIndex: number, tdb: number, w: number) => void) | undefined;
   /** ASHRAE 55 comfort zones to fill beneath the process chain. */
   comfortZones?: readonly ComfortZone[] | undefined;
@@ -62,6 +62,13 @@ export interface ChartProps {
    * same element out rather than re-querying the DOM by class name, which would
    * be a second way to find the chart and one that breaks silently when the
    * class changes.
+   *
+   * Two charts are mounted so the page can turn between operating cases, and
+   * only the one on screen is given this — so a chart behind another can never
+   * answer for it. The assignment is guarded rather than unconditional,
+   * because the face losing the ref detaches with the *old* closure still
+   * holding it, and an unguarded write there would null the ref the face in
+   * front had just set.
    */
   exportRef?: React.RefObject<SVGSVGElement | null> | undefined;
 }
@@ -205,7 +212,21 @@ function Protractor({
   );
 }
 
-export function Chart({
+/**
+ * The chart, skipped entirely when nothing about it has changed.
+ *
+ * Two of these are mounted so the page can turn between operating cases, and
+ * on a turn only one of them actually changes — the other keeps the same
+ * chain, view and overlays it had a moment ago. Without this it would still be
+ * reconciled, twice a turn, for nothing.
+ *
+ * The comparison is shallow, so every array and callback reaching this
+ * component has to be stable across renders that did not change it. The caller
+ * owes that; see the shared empty arrays in App.
+ */
+export const Chart = memo(ChartView);
+
+function ChartView({
   domain,
   pressure,
   units,
