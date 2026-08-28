@@ -482,12 +482,41 @@ export function writeProject(project: Project): string {
 }
 
 /** A filename that sorts usefully and does not collide. */
-export function projectFilename(meta: ProjectMeta, extension: string, now: Date = new Date()): string {
-  const stamp = now.toISOString().slice(0, 10);
-  const base = (meta.name ?? 'psychrometric-study')
+/** Lower-case, hyphenated, and safe on every filesystem people actually use. */
+function slug(text: string, limit: number): string {
+  return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-  return `${base || 'psychrometric-study'}-${stamp}.${extension}`;
+    .slice(0, limit);
+}
+
+export interface FilenameOptions {
+  /**
+   * Names the operating case, for exports that hold only one of them.
+   *
+   * A project file carries every case and must not be qualified — it would
+   * claim to be half of itself. A chart, a CSV, or a report is a picture of one
+   * case, and two of them in a downloads folder are indistinguishable without
+   * this.
+   */
+  qualifier?: string | undefined;
+  now?: Date | undefined;
+}
+
+export function projectFilename(
+  meta: ProjectMeta,
+  extension: string,
+  options: FilenameOptions | Date = {},
+): string {
+  // The third argument used to be the date. Accepting it keeps older callers
+  // and their tests honest rather than silently reading a Date as options.
+  const { qualifier, now = new Date() } =
+    options instanceof Date ? { qualifier: undefined, now: options } : options;
+
+  const stamp = now.toISOString().slice(0, 10);
+  const base = slug(meta.name ?? 'psychrometric-study', 60) || 'psychrometric-study';
+  const which = qualifier ? slug(qualifier, 40) : '';
+
+  return [base, which, stamp].filter(Boolean).join('-') + '.' + extension;
 }

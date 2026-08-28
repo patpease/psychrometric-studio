@@ -306,6 +306,16 @@ export function App(): React.JSX.Element {
    */
   const [topicOverride, setTopicOverride] = useState<string | null>(null);
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
+  /**
+   * The chain the walkthrough covered over, kept so it can be put back.
+   *
+   * The walkthrough builds a worked cooling example on top of whatever is
+   * there. That was survivable when a project held one chain and the tool
+   * opened with a demo in it; it is not now, when the other page may hold a
+   * real design and the button is labelled "guided walkthrough" rather than
+   * "discard my system".
+   */
+  const [walkthroughReturn, setWalkthroughReturn] = useState<Stage[] | null>(null);
   const [meta, setMeta] = useState<ProjectMeta>({});
   /** Problems from opening a project or a share link, shown until dismissed. */
   const [loadProblems, setLoadProblems] = useState<readonly string[]>([]);
@@ -364,6 +374,9 @@ export function App(): React.JSX.Element {
         stages: convertStages(system.stages, from, next),
         domain: defaultDomain(next),
       })),
+    );
+    setWalkthroughReturn((current) =>
+      current ? convertStages(current, from, next) : current,
     );
     setComfort((current) => convertComfort(current, from, next));
     // Weather hours are stored in the display system too, so they convert with
@@ -520,6 +533,38 @@ export function App(): React.JSX.Element {
     setActiveSystem(index);
     setTopicOverride(null);
   }, []);
+
+  /**
+   * The case the walkthrough runs in.
+   *
+   * It teaches a cooling coil selection, so it belongs on the cooling case
+   * rather than on whichever page happens to be open — starting it from the
+   * heating page would otherwise build a cooling chain over the heating one.
+   * By role rather than by position, so reordering the cases cannot send it to
+   * the wrong page.
+   */
+  const walkthroughSystem = Math.max(
+    0,
+    systems.findIndex((system) => system.role === 'cooling'),
+  );
+
+  const startWalkthrough = useCallback((): void => {
+    setWalkthroughReturn([...(systems[walkthroughSystem]?.stages ?? [])]);
+    setActiveSystem(walkthroughSystem);
+    setTopicOverride(null);
+    setWalkthroughStep(0);
+  }, [systems, walkthroughSystem]);
+
+  const exitWalkthrough = useCallback((): void => {
+    setWalkthroughStep(null);
+    setWalkthroughReturn(null);
+    if (!walkthroughReturn) return;
+    setSystems((previous) =>
+      previous.map((system, index) =>
+        index === walkthroughSystem ? { ...system, stages: walkthroughReturn } : system,
+      ),
+    );
+  }, [walkthroughReturn, walkthroughSystem]);
 
   const interaction = useChartInteraction({
     domain,
@@ -792,13 +837,13 @@ export function App(): React.JSX.Element {
             <WalkthroughPanel
               step={walkthroughStep}
               onStep={setWalkthroughStep}
-              onExit={() => setWalkthroughStep(null)}
+              onExit={exitWalkthrough}
             />
           ) : (
             <button
               type="button"
               className="wt-start"
-              onClick={() => setWalkthroughStep(0)}
+              onClick={startWalkthrough}
             >
               <Icon name={WALKTHROUGH.icon} size={26} />
               <span>
@@ -847,7 +892,9 @@ export function App(): React.JSX.Element {
         >
           {/* Outside the turning sheet: a control that flipped with the page
               would face away from the reader exactly when it was needed. */}
-          <SystemFlip systems={systems} activeSystem={activeSystem} onFlip={flipTo} />
+          {walkthroughStep === null && (
+            <SystemFlip systems={systems} activeSystem={activeSystem} onFlip={flipTo} />
+          )}
 
           <div
             className={`chart-sheet${canTurn ? ' can-turn' : ''}${activeSystem === 1 ? ' turned' : ''}`}

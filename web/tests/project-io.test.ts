@@ -693,3 +693,34 @@ describe('opening a version 1 file', () => {
     expect(restored.systems[0]!.weather.mode).toBe('off');
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+describe('export filenames', () => {
+  const AUG = new Date('2026-08-24T00:00:00Z');
+
+  it('names the operating case on an export that holds only one', () => {
+    // Two charts from one project are otherwise the same filename twice: the
+    // second either overwrites the first, or does not and leaves two files
+    // with no way to tell which case each one shows.
+    expect(
+      projectFilename({ name: 'Acme HQ' }, 'png', { qualifier: 'System Mode 2', now: AUG }),
+    ).toBe('acme-hq-system-mode-2-2026-08-24.png');
+  });
+
+  it('carries a renamed case into the filename', () => {
+    expect(
+      projectFilename({ name: 'Acme HQ' }, 'csv', { qualifier: 'Morning warm-up', now: AUG }),
+    ).toBe('acme-hq-morning-warm-up-2026-08-24.csv');
+  });
+
+  it('leaves a project file unqualified, because it holds every case', () => {
+    expect(projectFilename({ name: 'Acme HQ' }, 'json', { now: AUG })).toBe(
+      'acme-hq-2026-08-24.json',
+    );
+  });
+
+  it('still accepts a bare date, as the older callers pass', () => {
+    expect(projectFilename({ name: 'Acme HQ' }, 'pdf', AUG)).toBe('acme-hq-2026-08-24.pdf');
+  });
+});

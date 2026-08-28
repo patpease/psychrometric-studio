@@ -3,6 +3,29 @@
 v1.0 shipped 2026-08-24. This is what is known to be open, and it is a living
 file — `PLAN.md` is the historical record and should not grow further.
 
+## Open from the two-case work
+
+- **The combined report.** Exports are of the case on screen: a chart, a CSV, or
+  a PDF shows one operating case, and the filename now says which. What is not
+  built is the report that puts both in one document — the cooling and heating
+  chains side by side, with the equipment they share named once. This was always
+  the intended end state; the per-case export is the step before it, not a
+  substitute. Everything it needs is already in memory: `solvedSystems` holds
+  every case solved, not just the visible one.
+- **More than two cases.** The format takes any number and the app carries them
+  correctly — the migration, the validator, the file writer, and the solver are
+  all written for a list. Two things assume a pair: the page turn is a two-sided
+  sheet, and the interface offers no way to add a third. A project with more
+  cases still works; the extra ones simply arrive without the animation.
+- **A per-case comfort model.** Comfort is shared, which is right today because
+  the overlay already draws a winter zone and a summer zone together. If cases
+  ever mean something other than seasons, that assumption is the first to break.
+- **No linter.** `devDependencies` has no eslint, and the two-case work produced
+  a bug `eslint-plugin-react-hooks` would have caught immediately — a
+  `useCallback` with an empty dependency array holding a setter that had stopped
+  being identity-stable. The setters are hardened, but nothing stops the next
+  one.
+
 ## Carried from v1.0
 
 Each of these was a deliberate deferral, not an oversight.
@@ -13,7 +36,10 @@ Each of these was a deliberate deferral, not an oversight.
   typed fields, which works and is not how anyone thinks about it.
 - **One walkthrough.** *Sizing a cooling coil*, eight steps. Further ones are
   content in `education/walkthrough.ts`, not engine work — the runner takes any
-  number.
+  number. It now runs on the cooling case and restores what it covered; a
+  heating walkthrough would want the same treatment pointed at the other case,
+  which means the target becomes part of the walkthrough's own definition rather
+  than a constant in `App`.
 - **Oblique chart projection.** The schema has `projection: 'rectangular' |
   'oblique'` and only the first is implemented. Real ASHRAE charts are oblique.
 - **The PDF report service is not deployed.** Code complete and tested; three

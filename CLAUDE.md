@@ -3,7 +3,12 @@
 A psychrometric chart that solves an air-handling chain, checks it against
 ASHRAE 55 comfort, and counts a year of weather against it. Everything runs in
 the browser: no account, no upload, nothing kept. Live at
-`psychrometric-studio.pages.dev`; source is MIT.
+`psychrometric-studio.patpease0.workers.dev`; source is MIT.
+
+It is a **Cloudflare Worker, not a Pages site.** They are different products and
+the difference has broken a deploy: a `functions/` directory is ignored here,
+and a route that should 404 instead returns the SPA shell with a 200. The Worker
+entry point is `web/worker/index.ts`.
 
 **Read this file first, then only what you need.** `PLAN.md` is 1,400 lines of
 build history — a record of *why*, not an orientation. Do not read it whole.
@@ -19,9 +24,28 @@ web/src/weather/     EPW parsing, density binning, hours-in-zone
 web/src/education/   equipment + concept content, live design checks, walkthrough
 web/src/io/          project files, share links, CSV, SVG/PNG, report client
 web/src/icons/       60 equipment SVGs + build-time generator
-api/                 FastAPI PDF report service. Optional; not deployed in v1.
+web/worker/          the Worker entry point and the weather relay route
+api/                 FastAPI PDF report service. Optional; not deployed.
 shared/schema/       project.schema.json — authoritative project file format
 ```
+
+## The shape of a project
+
+A project holds **operating cases** — normally two, a cooling one and a heating
+one, turned between by the folded corner on the chart. This sits *above*
+airstreams and the distinction matters: an airstream is a parallel duct within
+one case and stage couplings resolve across them **by id, scoped per case**. Two
+cases both having a `return` stream is ordinary; a coupling in one must never
+resolve to the other's duct. `solveSystem` therefore takes one case, not a
+project.
+
+Shared across cases: units, site pressure, comfort, the weather file, and
+`meta`. Per case: the chain, the chart view, the hour filter, and its own notes.
+`meta` deliberately does not fork — a client name in two places is one that will
+disagree with itself.
+
+The schema is at version 2 and `MIGRATIONS` is no longer empty; a v1 file opens
+as a single cooling case.
 
 ## Verifying a change
 
@@ -33,6 +57,17 @@ cd web && npm run typecheck && npm test && npm run build
 bitten by exactly that (see `docs/adr/0003-umd-interop.md`): tests passed while
 the app failed to boot, because vitest did CJS interop that Vite's ESM pipeline
 would not. For anything user-visible, open it. `npm run dev` serves on 5183.
+
+**A green build is not evidence the deploy works either.** Two deploys have
+failed with everything passing — once on the root directory, once on
+Pages-versus-Workers. `npm run preview:worker` serves the built site and the
+relay together in the real Workers runtime, and would have caught both.
+
+**Measure performance on the production build, never the dev one.** React's
+development build is several times slower. A page turn measured a 100 ms hitch
+in dev and 18 ms in production; optimising against the dev number would have
+been chasing something no user has. `npm run preview` serves the built app on
+4183.
 
 ## Rules the tests enforce
 
@@ -72,6 +107,20 @@ the failure shapes this codebase produces.
 - **Volumetric flow used where mass flow is meant.** 500 CFM at 95 °F is not the
   same dry-air mass as 500 CFM at 75 °F. The error always flatters the
   outdoor-air percentage.
+- **A `useCallback` holding a setter that is no longer stable.** The write-through
+  setters in `App.tsx` used to be `useState` setters, whose identity never
+  changes, and several callers still capture one with an empty dependency array.
+  When those setters started closing over the active case, every such caller
+  wrote to whichever case was open when it was created — a click that did
+  nothing on the second page, and a drag that silently edited the first. They
+  read the target through a ref now, so their identity stays stable. There is no
+  linter here to catch the next one.
+- **`?? []` in a prop.** It builds a new array every render, so a memoised child
+  comparing props shallowly re-renders every time regardless. Share one frozen
+  empty value.
+- **The walkthrough writing over a real design.** It builds a worked example on
+  top of the chain that is there. It now runs on the cooling case by role,
+  snapshots what it covered, and puts it back on exit.
 
 ## Regenerated files
 

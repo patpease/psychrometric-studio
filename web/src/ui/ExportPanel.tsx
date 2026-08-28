@@ -16,7 +16,7 @@ import type { SolvedAirstream } from '../processes/chain.js';
 import type { Atmosphere } from '../psych/atmosphere.js';
 import type { ChartDomain, ChartMargin } from '../chart/scales.js';
 import type { UnitSystem } from '../psych/units.js';
-import type { ProjectMeta } from '../types/project.js';
+import { systemLabel, type ProjectMeta } from '../types/project.js';
 import type { WeatherMode } from '../chart/WeatherLayer.js';
 import type { WeatherHour } from '../weather/epw.js';
 import {
@@ -83,6 +83,21 @@ export function ExportPanel({
   onMetaChange,
   onOpen,
 }: ExportPanelProps): React.JSX.Element {
+  /**
+   * The case these exports are of, when there is more than one to confuse.
+   *
+   * A project file holds every case, so it is never qualified. A chart, a CSV,
+   * or a report holds one, and two of those in a downloads folder are the same
+   * filename twice — the second silently overwriting the first, or not, which
+   * is worse because then there are two and no way to tell them apart.
+   *
+   * A project with a single case needs none of this, and gets none of it.
+   */
+  const caseName =
+    session.systems.length > 1
+      ? systemLabel(session.systems[session.activeSystem] ?? {}, session.activeSystem)
+      : undefined;
+
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [link, setLink] = useState<ReturnType<typeof shareLink> | null>(null);
@@ -237,7 +252,7 @@ export function ExportPanel({
             void run('Writing the CSV', () => {
               downloadText(
                 toCsv({ solved, units, atmosphere, meta: session.meta }),
-                projectFilename(session.meta, 'csv'),
+                projectFilename(session.meta, 'csv', { qualifier: caseName }),
                 'text/csv',
               );
             })
@@ -250,7 +265,7 @@ export function ExportPanel({
           onClick={() =>
             void run('Rendering the PNG', async () => {
               const blob = await chartToPng(chartOptions(), 2);
-              downloadBlob(blob, projectFilename(session.meta, 'png'));
+              downloadBlob(blob, projectFilename(session.meta, 'png', { qualifier: caseName }));
             })
           }
         >
@@ -262,7 +277,7 @@ export function ExportPanel({
             void run('Writing the SVG', () => {
               downloadText(
                 chartToSvg(chartOptions()),
-                projectFilename(session.meta, 'svg'),
+                projectFilename(session.meta, 'svg', { qualifier: caseName }),
                 'image/svg+xml',
               );
             })
@@ -293,7 +308,7 @@ export function ExportPanel({
                   const blob = await requestReport(
                     buildReportPayload({ solved, units, atmosphere, meta: session.meta, chartPng }),
                   );
-                  downloadBlob(blob, projectFilename(session.meta, 'pdf'));
+                  downloadBlob(blob, projectFilename(session.meta, 'pdf', { qualifier: caseName }));
                 })
               }
             >

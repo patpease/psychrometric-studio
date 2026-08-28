@@ -109,7 +109,7 @@ anywhere.
 **And verify after deploying:**
 
 ```bash
-curl -sI "https://YOUR-SITE.pages.dev/api/weather?url=https://climate.onebuilding.org/WMO_Region_4_North_and_Central_America/ABW_Aruba/ABW_AA_Queen.Beatrix.Intl.AP.789820_TMYx.2009-2023.zip" | head -3
+curl -sI "https://YOUR-SITE.workers.dev/api/weather?url=https://climate.onebuilding.org/WMO_Region_4_North_and_Central_America/ABW_Aruba/ABW_AA_Queen.Beatrix.Intl.AP.789820_TMYx.2009-2023.zip" | head -3
 ```
 
 `200` with `content-type: application/zip` means it is live.
