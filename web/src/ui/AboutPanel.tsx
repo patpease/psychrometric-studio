@@ -32,7 +32,7 @@ const BUNDLED = [
     version: '1.4.0',
     licence: 'MIT',
     role: 'ASHRAE 55 PMV/PPD and the adaptive model; a port of pythermalcomfort.',
-    href: 'https://github.com/CenterForTheBuiltEnvironment/jsthermalcomfort',
+    href: 'https://github.com/FedericoTartarini/jsthermalcomfort',
   },
   {
     name: 'fflate',
