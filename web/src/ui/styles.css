@@ -2405,3 +2405,55 @@ body {
     transition: none;
   }
 }
+
+/* ----------------------------------------------------------------- feedback */
+
+.feedback h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.feedback .reset {
+  margin-top: 0.6rem;
+}
+
+/* A quieter second route, for a reader whose browser has no mail client. */
+.feedback-alt {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.feedback-alt:hover,
+.feedback-alt:focus-visible {
+  color: var(--accent);
+}
+
+.feedback-address {
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.feedback-address code {
+  font-size: 0.75rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.feedback-copied {
+  color: var(--accent);
+}

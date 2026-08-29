@@ -195,6 +195,40 @@ tool is designed around.
 
 ---
 
+## The feedback address — when a mail link stops being enough
+
+The feedback control in the right-hand panel opens the reader's own mail client.
+The address is never in the markup: it is stored ROT13'd in two halves and
+assembled on click, so neither of the two regexes an address harvester runs —
+one for `mailto:` hrefs, one for anything shaped like `name@host.tld` — finds
+anything in the served page. `web/tests/contact.test.ts` pins that, and pins it
+by hash rather than by writing the address into a public repository.
+
+**This is a speed bump, not a wall.** A crawler that renders the page and clicks
+things gets the address, and more of them do every year. If the spam ever
+outgrows Gmail's filtering, the fix is to stop putting the address on the page
+at all:
+
+1. Add a `POST /api/feedback` route to `web/worker/index.ts`, beside the weather
+   relay. It reads a JSON body and forwards it to a transactional email API —
+   Resend, Postmark, and SendGrid all have a free tier that covers a tool this
+   size. MailChannels no longer offers the free Workers integration.
+2. Put the destination address and the API key in Worker secrets
+   (`npx wrangler secret put FEEDBACK_TO`). Secrets are not in the bundle, not
+   in the repository, and not in `wrangler.jsonc`.
+3. Replace the mail button with a textarea and a submit that `fetch`es the
+   route. **`connect-src 'self'` already permits this** — the request is
+   same-origin, which is the point of putting the route on the Worker rather
+   than posting to a third-party form service. A third-party endpoint would need
+   its origin adding to `connect-src` in `web/public/_headers`.
+4. Rate-limit it. An open mail relay behind a public form is a spam problem
+   pointed at your own address rather than away from it: cap by IP in a
+   Durable Object or KV, and drop anything with a filled honeypot field.
+
+The trade is one route, one API key, and a form the reader fills in on the page
+instead of in the mail client they already know how to use. Worth it when the
+address is being harvested; not worth it before.
+
 ## Verifying a deployment
 
 - The chart draws, and the five starter stages each show an icon.

@@ -36,6 +36,7 @@ import { useTheme, type ThemeChoice } from './theme.js';
 import { runCheck, WALKTHROUGH } from '../education/index.js';
 import { ExportPanel } from './ExportPanel.js';
 import { AboutPanel } from './AboutPanel.js';
+import { FeedbackPanel } from './FeedbackPanel.js';
 import { setRescue } from '../io/rescue.js';
 import {
   blankSystem,
@@ -1129,6 +1130,8 @@ export function App(): React.JSX.Element {
           <Collapsible title="About this tool" defaultOpen={false}>
             <AboutPanel />
           </Collapsible>
+
+          <FeedbackPanel units={units} />
 
           <footer className="panel-footer">
             <p>
