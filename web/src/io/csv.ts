@@ -13,7 +13,7 @@
  * as text in the first column and skips over them; a human reads them first.
  */
 import type { SolvedAirstream } from '../processes/chain.js';
-import { systemTotals } from '../processes/chain.js';
+import { systemTotals, type SystemTotals } from '../processes/chain.js';
 import { LABELS, humidityRatioToDisplay, enthalpyToDisplay, type UnitSystem } from '../psych/units.js';
 import type { Atmosphere } from '../psych/atmosphere.js';
 import { describeBasis } from '../psych/atmosphere.js';
@@ -59,7 +59,103 @@ export function toCsv({
   meta,
   generated = new Date(),
 }: CsvOptions): string {
+  const lines: string[] = [];
+
+  lines.push(...provenance({ units, atmosphere, meta, generated }));
+
+  lines.push(...systemSections(solved, units));
+
+  return `${lines.join('\r\n')}\r\n`;
+}
+
+
+/** One operating case in a combined schedule. */
+export interface CombinedCsvCase {
+  readonly label: string;
+  readonly solved: SolvedAirstream;
+}
+
+export interface CombinedCsvOptions {
+  readonly cases: readonly CombinedCsvCase[];
+  readonly units: UnitSystem;
+  readonly atmosphere: Atmosphere;
+  readonly meta: ProjectMeta;
+  readonly generated?: Date;
+}
+
+/**
+ * Every operating case in one schedule, with the totals set against each other.
+ *
+ * The provenance is written once, because it is true of the whole file: one
+ * project, one unit system, one site pressure, one build. What repeats is the
+ * per-case block, verbatim from the same generator the single-case export uses.
+ *
+ * The comparison at the end is the reason the file exists. A reader with two
+ * separate exports has to align the totals by hand and can get it wrong; here
+ * the peak cooling and the peak heating for the same air handler sit on one
+ * row, which is the number a plant selection is actually made from.
+ */
+export function toCombinedCsv({
+  cases,
+  units,
+  atmosphere,
+  meta,
+  generated = new Date(),
+}: CombinedCsvOptions): string {
   const labels = LABELS[units];
+  const lines: string[] = [
+    ...provenance({ units, atmosphere, meta, generated }),
+    `# Operating cases: ${cases.map((entry) => entry.label).join(', ')}`,
+    '',
+  ];
+
+  for (const entry of cases) {
+    lines.push(`# ===== ${entry.label} =====`);
+    lines.push('');
+    lines.push(...systemSections(entry.solved, units));
+    lines.push('');
+  }
+
+  /* -- comparison -------------------------------------------------------- */
+  const totals = cases.map((entry) => systemTotals(entry.solved));
+  lines.push('# Comparison');
+  lines.push(row(['Quantity', ...cases.map((entry) => entry.label), 'Unit']));
+
+  const compare = [
+    ['Total cooling', (t: SystemTotals) => num(t.cooling, 2), labels.duty],
+    ['Total heating', (t: SystemTotals) => num(t.heating, 2), labels.duty],
+    ['Humidification', (t: SystemTotals) => num(t.humidification, 2), labels.moistureRate],
+    ['Dehumidification', (t: SystemTotals) => num(t.dehumidification, 2), labels.moistureRate],
+    ['Net sensible', (t: SystemTotals) => num(t.netDuty.sensible, 2), labels.duty],
+    ['Net latent', (t: SystemTotals) => num(t.netDuty.latent, 2), labels.duty],
+  ] as const;
+
+  for (const [name, read, unit] of compare) {
+    lines.push(row([name, ...totals.map(read), unit]));
+  }
+
+  return `${lines.join('\r\n')}\r\n`;
+}
+
+/**
+ * The header every export carries: who made it, from what, at what pressure.
+ *
+ * One copy, because a combined file states it once for the whole schedule and
+ * a single-case file states it once for the case. A report that cannot be
+ * traced to the build that produced it is a liability, so this is not
+ * optional and not allowed to differ between the two.
+ */
+function provenance({
+  units,
+  atmosphere,
+  meta,
+  generated,
+}: {
+  units: UnitSystem;
+  atmosphere: Atmosphere;
+  meta: ProjectMeta;
+  generated: Date;
+}): string[] {
   const lines: string[] = [];
 
   /* -- provenance ------------------------------------------------------- */
@@ -77,6 +173,20 @@ export function toCsv({
   lines.push('#');
   lines.push('# Sign convention: duties are positive INTO the airstream, so a cooling coil is negative.');
   lines.push('');
+
+  return lines;
+}
+/**
+ * Everything about one operating case: its state points, its process loads,
+ * and its totals.
+ *
+ * Split out so the single-case export and the combined one emit byte-identical
+ * sections. A second copy would drift, and a schedule that disagrees with
+ * itself between two exports of the same project is worse than either.
+ */
+function systemSections(solved: SolvedAirstream, units: UnitSystem): string[] {
+  const labels = LABELS[units];
+  const lines: string[] = [];
 
   /* -- state points ------------------------------------------------------ */
   lines.push('# State points');
@@ -187,5 +297,5 @@ export function toCsv({
   lines.push(row(['Net sensible', num(totals.netDuty.sensible, 2), labels.duty]));
   lines.push(row(['Net latent', num(totals.netDuty.latent, 2), labels.duty]));
 
-  return `${lines.join('\r\n')}\r\n`;
+  return lines;
 }

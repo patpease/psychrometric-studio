@@ -27,8 +27,14 @@ import {
   type SessionState,
 } from '../io/project.js';
 import { shareLink } from '../io/url.js';
-import { toCsv } from '../io/csv.js';
-import { chartToBase64Png, chartToPng, chartToSvg } from '../io/image.js';
+import { toCsv, toCombinedCsv } from '../io/csv.js';
+import {
+  chartToBase64Png,
+  chartToPng,
+  chartToSvg,
+  chartsToPng,
+  chartsToSvg,
+} from '../io/image.js';
 import { downloadBlob, downloadText } from '../io/download.js';
 import { API_BASE, buildReportPayload, reportServiceAvailable, requestReport } from '../io/report.js';
 import { DISCLAIMER } from '../config/branding.js';
@@ -42,6 +48,19 @@ export interface ExportPanelProps {
   margin?: ChartMargin | undefined;
   chartRef: React.RefObject<SVGSVGElement | null>;
   weather: { hours: readonly WeatherHour[]; mode: WeatherMode };
+  /**
+   * Every operating case, for the combined exports.
+   *
+   * Both charts are mounted whether or not the page has been turned, so a
+   * drawing of both needs no re-render — only a reference to each.
+   */
+  cases: readonly {
+    label: string;
+    chartRef: React.RefObject<SVGSVGElement | null>;
+    domain: ChartDomain;
+    weather: { hours: readonly WeatherHour[]; mode: WeatherMode };
+    solved: SolvedAirstream;
+  }[];
   onMetaChange: (meta: ProjectMeta) => void;
   /** Called with a validated project when the user opens a file. */
   onOpen: (text: string) => void;
@@ -80,6 +99,7 @@ export function ExportPanel({
   margin,
   chartRef,
   weather,
+  cases,
   onMetaChange,
   onOpen,
 }: ExportPanelProps): React.JSX.Element {
@@ -148,6 +168,30 @@ export function ExportPanel({
       caption: session.meta.name ?? undefined,
     };
   }, [chartRef, domain, margin, weather, session.meta.name]);
+
+  /**
+   * Export options for every case, in project order.
+   *
+   * Throws rather than skipping a case whose chart is missing: a combined
+   * drawing quietly containing one of two systems is worse than no drawing,
+   * because it looks complete.
+   */
+  const combinedCases = useCallback(() => {
+    return cases.map((entry) => {
+      const svg = entry.chartRef.current;
+      if (!svg) throw new Error(`The ${entry.label} chart is not on screen yet.`);
+      return {
+        label: entry.label,
+        options: {
+          svg,
+          domain: entry.domain,
+          margin,
+          weather: entry.weather,
+          caption: session.meta.name ?? undefined,
+        },
+      };
+    });
+  }, [cases, margin, session.meta.name]);
 
   const project = () => toProject(session);
 
@@ -290,6 +334,62 @@ export function ExportPanel({
         Charts export on a light background whatever theme you are using, and
         carry the version, calculation basis, and site pressure along the bottom.
       </p>
+
+      {cases.length > 1 && (
+        <>
+          <h3>Both cases</h3>
+          <div className="export-actions">
+            <button
+              type="button"
+              onClick={() =>
+                void run('Writing the combined CSV', () => {
+                  downloadText(
+                    toCombinedCsv({
+                      cases: cases.map((entry) => ({ label: entry.label, solved: entry.solved })),
+                      units,
+                      atmosphere,
+                      meta: session.meta,
+                    }),
+                    projectFilename(session.meta, 'csv', { qualifier: 'combined' }),
+                    'text/csv',
+                  );
+                })
+              }
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void run('Rendering both charts', async () => {
+                  const blob = await chartsToPng(combinedCases(), 2);
+                  downloadBlob(blob, projectFilename(session.meta, 'png', { qualifier: 'combined' }));
+                })
+              }
+            >
+              PNG
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void run('Writing both charts', () => {
+                  downloadText(
+                    chartsToSvg(combinedCases()),
+                    projectFilename(session.meta, 'svg', { qualifier: 'combined' }),
+                    'image/svg+xml',
+                  );
+                })
+              }
+            >
+              SVG
+            </button>
+          </div>
+          <p className="comfort-note">
+            Every case in one file: the charts side by side at their own scales,
+            and a schedule whose last section sets the totals against each other.
+          </p>
+        </>
+      )}
 
       {pdfAvailable && (
         <>

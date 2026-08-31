@@ -200,65 +200,104 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * `weatherScale` controls the resolution of the composited raster layer only;
  * everything else stays vector.
  */
-export function chartToSvg(options: ChartExportOptions, weatherScale = 2): string {
-  const { svg } = options;
-  const width = svg.width.baseVal.value || svg.clientWidth;
-  const height = svg.height.baseVal.value || svg.clientHeight;
+/** The measured size of a live chart element. */
+function sizeOf(svg: SVGSVGElement): { width: number; height: number } {
+  return {
+    width: svg.width.baseVal.value || svg.clientWidth,
+    height: svg.height.baseVal.value || svg.clientHeight,
+  };
+}
 
-  // The clone is styled inside a light container so the export does not carry
-  // the viewer's theme. It has to be *in* the document for styles to compute,
-  // so it is parked offscreen rather than hidden — `display: none` computes no
-  // layout, and text-anchor and font metrics would come back unresolved.
+/**
+ * A light-themed offscreen host, torn down whatever happens inside it.
+ *
+ * The clone is styled inside a light container so an export never carries the
+ * viewer's theme. It has to be *in* the document for styles to compute, so it
+ * is parked offscreen rather than hidden — `display: none` computes no layout,
+ * and text-anchor and font metrics would come back unresolved.
+ */
+function inLightHost<T>(run: (host: HTMLDivElement) => T): T {
   const host = document.createElement('div');
   host.setAttribute('data-theme', 'light');
   host.style.cssText = 'position:absolute;left:-100000px;top:0;width:0;height:0;overflow:hidden';
-
-  const clone = svg.cloneNode(true) as SVGSVGElement;
-  host.appendChild(clone);
   document.body.appendChild(host);
-
-  let serialised: string;
   try {
-    inlineStyles(clone);
-
-    clone.setAttribute('xmlns', SVG_NS);
-    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-    clone.setAttribute('width', String(width));
-    clone.setAttribute('height', String(height));
-    clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
-
-    // An opaque page. Without it the chart is transparent, which reads as white
-    // in a browser and as whatever is underneath it in a document — the classic
-    // way an exported chart arrives with black text on a black slide.
-    const background = document.createElementNS(SVG_NS, 'rect');
-    background.setAttribute('x', '0');
-    background.setAttribute('y', '0');
-    background.setAttribute('width', String(width));
-    background.setAttribute('height', String(height));
-    background.setAttribute('fill', '#ffffff');
-    clone.insertBefore(background, clone.firstChild);
-
-    const weather = weatherImage(options, width, height, weatherScale);
-    if (weather) {
-      const image = document.createElementNS(SVG_NS, 'image');
-      image.setAttribute('x', '0');
-      image.setAttribute('y', '0');
-      image.setAttribute('width', String(width));
-      image.setAttribute('height', String(height));
-      image.setAttribute('href', weather);
-      // Beneath the chart furniture and above the background, which is the
-      // same order the live page composites them in.
-      clone.insertBefore(image, background.nextSibling);
-    }
-
-    clone.appendChild(footer(options, width, height));
-    serialised = new XMLSerializer().serializeToString(clone);
+    return run(host);
   } finally {
     // Removed even if inlining threw, or a failed export would leave an
     // invisible copy of the chart in the document for the rest of the session.
     host.remove();
   }
+}
 
+/**
+ * One chart, cloned and made self-contained: styles inlined, weather
+ * composited, page painted.
+ *
+ * Shared by the single-chart export and the side-by-side one so the two cannot
+ * drift. Export styling is the part of this codebase with the longest history
+ * of looking right and being wrong (ADR 0004), and it earns exactly one
+ * implementation.
+ */
+function prepareChart(
+  options: ChartExportOptions,
+  host: HTMLDivElement,
+  weatherScale: number,
+  withFooter: boolean,
+): { clone: SVGSVGElement; width: number; height: number } {
+  const { svg } = options;
+  const { width, height } = sizeOf(svg);
+
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  host.appendChild(clone);
+
+  inlineStyles(clone);
+
+  clone.setAttribute('xmlns', SVG_NS);
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+  // An opaque page. Without it the chart is transparent, which reads as white
+  // in a browser and as whatever is underneath it in a document — the classic
+  // way an exported chart arrives with black text on a black slide.
+  const background = document.createElementNS(SVG_NS, 'rect');
+  background.setAttribute('x', '0');
+  background.setAttribute('y', '0');
+  background.setAttribute('width', String(width));
+  background.setAttribute('height', String(height));
+  background.setAttribute('fill', '#ffffff');
+  clone.insertBefore(background, clone.firstChild);
+
+  const weather = weatherImage(options, width, height, weatherScale);
+  if (weather) {
+    const image = document.createElementNS(SVG_NS, 'image');
+    image.setAttribute('x', '0');
+    image.setAttribute('y', '0');
+    image.setAttribute('width', String(width));
+    image.setAttribute('height', String(height));
+    image.setAttribute('href', weather);
+    // Beneath the chart furniture and above the background, which is the
+    // same order the live page composites them in.
+    clone.insertBefore(image, background.nextSibling);
+  }
+
+  if (withFooter) clone.appendChild(footer(options, width, height));
+  return { clone, width, height };
+}
+
+/**
+ * Serialise the chart to a standalone SVG document.
+ *
+ * `weatherScale` controls the resolution of the composited raster layer only;
+ * everything else stays vector.
+ */
+export function chartToSvg(options: ChartExportOptions, weatherScale = 2): string {
+  const serialised = inLightHost((host) => {
+    const { clone } = prepareChart(options, host, weatherScale, true);
+    return new XMLSerializer().serializeToString(clone);
+  });
   return `<?xml version="1.0" encoding="UTF-8"?>\n${serialised}`;
 }
 
@@ -296,6 +335,107 @@ function footer(options: ChartExportOptions, width: number, height: number): SVG
 }
 
 /* -------------------------------------------------------------------------- *
+ * Two cases, side by side
+ * -------------------------------------------------------------------------- */
+
+/** One operating case in a combined drawing. */
+export interface CombinedChartCase {
+  readonly label: string;
+  readonly options: ChartExportOptions;
+}
+
+/** Layout of the composite, in SVG user units. */
+const COMBINED = { pad: 14, gap: 22, labelBand: 26, footerBand: 34 } as const;
+
+/**
+ * Measure a composite before drawing it, so the raster path can size a canvas
+ * without building the document twice.
+ */
+export function combinedChartSize(cases: readonly CombinedChartCase[]): {
+  width: number;
+  height: number;
+} {
+  const sizes = cases.map((entry) => sizeOf(entry.options.svg));
+  const panels = sizes.reduce((total, size) => total + size.width, 0);
+  return {
+    width: COMBINED.pad * 2 + panels + COMBINED.gap * Math.max(0, cases.length - 1),
+    height:
+      COMBINED.pad + COMBINED.labelBand + Math.max(0, ...sizes.map((s) => s.height)) + COMBINED.footerBand,
+  };
+}
+
+/**
+ * Both operating cases on one page, each keeping its own chart and its own view.
+ *
+ * Side by side rather than overlaid: a winter case sits cold and dry and a
+ * summer one warm and humid, and the axes that contain both leave each chain
+ * crowded into a corner of a chart that is mostly empty. Two charts at their
+ * own scales compare better than one at a scale that suits neither.
+ *
+ * Each panel is a nested `<svg>` with its own viewBox, so the charts keep their
+ * coordinate systems and nothing has to be re-projected. That only works
+ * because each chart's `<defs>` carry instance-unique ids — two panels sharing
+ * an `id="plot-clip"` would both resolve to whichever came first, and the
+ * second would be clipped by the first one's plot rectangle.
+ */
+export function chartsToSvg(cases: readonly CombinedChartCase[], weatherScale = 2): string {
+  if (cases.length === 0) throw new Error('A combined chart needs at least one case.');
+
+  const total = combinedChartSize(cases);
+
+  const serialised = inLightHost((host) => {
+    const root = document.createElementNS(SVG_NS, 'svg');
+    root.setAttribute('xmlns', SVG_NS);
+    root.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    root.setAttribute('width', String(total.width));
+    root.setAttribute('height', String(total.height));
+    root.setAttribute('viewBox', `0 0 ${total.width} ${total.height}`);
+
+    const page = document.createElementNS(SVG_NS, 'rect');
+    page.setAttribute('x', '0');
+    page.setAttribute('y', '0');
+    page.setAttribute('width', String(total.width));
+    page.setAttribute('height', String(total.height));
+    page.setAttribute('fill', '#ffffff');
+    root.appendChild(page);
+
+    let x = COMBINED.pad;
+    for (const entry of cases) {
+      // No per-panel footer: the provenance is stamped once, on the page.
+      const { clone, width } = prepareChart(entry.options, host, weatherScale, false);
+
+      const label = document.createElementNS(SVG_NS, 'text');
+      label.setAttribute('x', String(x));
+      label.setAttribute('y', String(COMBINED.pad + 12));
+      label.setAttribute('style', `font-family:${FONT_STACK};font-size:12px;font-weight:600;fill:#14202b`);
+      label.textContent = entry.label;
+      root.appendChild(label);
+
+      clone.setAttribute('x', String(x));
+      clone.setAttribute('y', String(COMBINED.pad + COMBINED.labelBand));
+      root.appendChild(clone);
+
+      x += width + COMBINED.gap;
+    }
+
+    root.appendChild(footer(cases[0]!.options, total.width, total.height));
+    return new XMLSerializer().serializeToString(root);
+  });
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${serialised}`;
+}
+
+/** The combined drawing, rasterised. */
+export async function chartsToPng(
+  cases: readonly CombinedChartCase[],
+  scale = 2,
+): Promise<Blob> {
+  const svgText = chartsToSvg(cases, scale);
+  const { width, height } = combinedChartSize(cases);
+  return rasterise(svgText, width, height, scale);
+}
+
+/* -------------------------------------------------------------------------- *
  * Raster
  * -------------------------------------------------------------------------- */
 
@@ -310,11 +450,23 @@ function footer(options: ChartExportOptions, width: number, height: number): SVG
  * rather than linked.
  */
 export async function chartToPng(options: ChartExportOptions, scale = 2): Promise<Blob> {
-  const svgText = chartToSvg(options, scale);
-  const { svg } = options;
-  const width = svg.width.baseVal.value || svg.clientWidth;
-  const height = svg.height.baseVal.value || svg.clientHeight;
+  const { width, height } = sizeOf(options.svg);
+  return rasterise(chartToSvg(options, scale), width, height, scale);
+}
 
+/**
+ * Turn a serialised SVG into a PNG blob.
+ *
+ * Shared by the single and combined paths: they differ only in what they drew
+ * and how big it is, and a second copy of the canvas dance is a second place
+ * for the white page fill to go missing.
+ */
+async function rasterise(
+  svgText: string,
+  width: number,
+  height: number,
+  scale: number,
+): Promise<Blob> {
   const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }));
 
   try {

@@ -48,7 +48,7 @@ import {
   type SessionSystem,
 } from '../io/project.js';
 import { readFragment } from '../io/url.js';
-import type { ProjectMeta } from '../types/project.js';
+import { systemLabel, type ProjectMeta } from '../types/project.js';
 import { WeatherPanel, type WeatherState } from './WeatherPanel.js';
 import { WeatherLayer } from '../chart/WeatherLayer.js';
 import { convertHoursTo, describeLocation } from '../weather/epw.js';
@@ -320,7 +320,20 @@ export function App(): React.JSX.Element {
   const [meta, setMeta] = useState<ProjectMeta>({});
   /** Problems from opening a project or a share link, shown until dismissed. */
   const [loadProblems, setLoadProblems] = useState<readonly string[]>([]);
-  const chartRef = useRef<SVGSVGElement | null>(null);
+  /**
+   * One export ref per face, rather than one shared between them.
+   *
+   * A combined drawing needs both charts at once, and both are mounted — the
+   * page turn already keeps the far case rendered. Giving each face its own ref
+   * also retires the hand-off that used to happen on every turn, where the face
+   * losing a shared ref detached with the old closure still holding it.
+   */
+  const faceRefs = useRef<React.RefObject<SVGSVGElement | null>[]>([]);
+  const faceRef = (index: number): React.RefObject<SVGSVGElement | null> => {
+    faceRefs.current[index] ??= { current: null };
+    return faceRefs.current[index]!;
+  };
+  const chartRef = faceRef(activeSystem);
 
   /**
    * Light or dark, and who chose it.
@@ -775,7 +788,7 @@ export function App(): React.JSX.Element {
               ? (kind) => setWeather((current) => ({ ...current, selectedDesignDay: kind }))
               : undefined
           }
-          exportRef={live ? chartRef : undefined}
+          exportRef={faceRef(index)}
         />
       </div>
     );
@@ -929,6 +942,16 @@ export function App(): React.JSX.Element {
               atmosphere={atmosphere}
               domain={domain}
               chartRef={chartRef}
+              cases={systems.map((system, index) => ({
+                label: systemLabel(system, index),
+                chartRef: faceRef(index),
+                domain: system.domain,
+                weather: {
+                  hours: weatherFile?.hours ?? NO_HOURS,
+                  mode: system.weather.mode ?? 'off',
+                },
+                solved: solvedSystems[index]!.airstreams[0]!,
+              }))}
               weather={{ hours: weather.file?.hours ?? [], mode: weather.mode }}
               onMetaChange={setMeta}
               onOpen={applyProject}

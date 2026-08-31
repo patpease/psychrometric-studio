@@ -27,7 +27,7 @@ import {
 import { validateProject } from '../src/io/validate.js';
 import { SCHEMA_VERSION, systemLabel } from '../src/types/project.js';
 import { decodeProject, encodeProject, readFragment, shareLink, MAX_URL_LENGTH } from '../src/io/url.js';
-import { toCsv } from '../src/io/csv.js';
+import { toCsv, toCombinedCsv } from '../src/io/csv.js';
 import { buildReportPayload } from '../src/io/report.js';
 import { solveSystem } from '../src/processes/chain.js';
 import { standardAtmosphere } from '../src/psych/atmosphere.js';
@@ -774,5 +774,79 @@ describe('CSV columns line up with their headings', () => {
     // Guards the lookup above: a row shorter than its header would let
     // `underHeading` read undefined and quietly pass.
     expect(first).toHaveLength(header.length);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe('the combined schedule', () => {
+  const HEATING: Stage[] = [
+    { id: 'oa', type: 'source', name: 'Winter outdoor air', airflow: 500, params: { tdb: 5, rh: 0.6 } },
+    { id: 'hc', type: 'heating', name: 'Heating coil', params: { tdbOut: 75 } },
+  ];
+
+  const combined = toCombinedCsv({
+    cases: [
+      { label: 'System Mode 1', solved: solve() },
+      { label: 'System Mode 2', solved: solve(HEATING) },
+    ],
+    units: 'IP',
+    atmosphere: standardAtmosphere('IP'),
+    meta: { name: 'Test AHU' },
+    generated: new Date('2026-08-24T12:00:00.000Z'),
+  });
+
+  it('states the provenance once, because it is true of the whole file', () => {
+    // One project, one unit system, one site pressure, one build. Repeating it
+    // per case invites two copies that disagree.
+    const occurrences = combined.split('# Calculation basis:').length - 1;
+    expect(occurrences).toBe(1);
+  });
+
+  it('names the cases it contains', () => {
+    expect(combined).toContain('# Operating cases: System Mode 1, System Mode 2');
+  });
+
+  it('carries every case, each under its own banner', () => {
+    expect(combined).toContain('# ===== System Mode 1 =====');
+    expect(combined).toContain('# ===== System Mode 2 =====');
+    for (const stage of STAGES) expect(combined).toContain(stage.name!);
+    expect(combined).toContain('Winter outdoor air');
+  });
+
+  it('emits each case through the same generator the single export uses', () => {
+    // The per-case block must be byte-identical to a single-case export's, or
+    // two exports of one project disagree about the same numbers.
+    const single = toCsv({
+      solved: solve(HEATING),
+      units: 'IP',
+      atmosphere: standardAtmosphere('IP'),
+      meta: { name: 'Test AHU' },
+      generated: new Date('2026-08-24T12:00:00.000Z'),
+    });
+    const singleBody = single.slice(single.indexOf('# State points'));
+    const combinedTail = combined.slice(combined.indexOf('# ===== System Mode 2 ====='));
+    for (const line of singleBody.split('\r\n').filter(Boolean)) {
+      expect(combinedTail, `missing from the combined file: ${line}`).toContain(line);
+    }
+  });
+
+  it('sets the totals against each other, which is why the file exists', () => {
+    const comparison = combined.slice(combined.indexOf('# Comparison'));
+    expect(comparison).toContain('Quantity,System Mode 1,System Mode 2,Unit');
+    // The cooling case cools and the heating case heats; a comparison that did
+    // not distinguish them would be reading one case twice.
+    const cooling = comparison.split('\r\n').find((l) => l.startsWith('Total cooling'))!;
+    const heating = comparison.split('\r\n').find((l) => l.startsWith('Total heating'))!;
+    const [, coolA, coolB] = cooling.split(',');
+    const [, heatA, heatB] = heating.split(',');
+    expect(Number(coolA)).toBeLessThan(0);
+    expect(Number(coolB)).toBe(0);
+    expect(Number(heatB)).toBeGreaterThan(0);
+    expect(Number(heatA)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('uses CRLF throughout, as the single-case export does', () => {
+    expect(combined.split('\n').every((line) => line === '' || line.endsWith('\r'))).toBe(true);
   });
 });

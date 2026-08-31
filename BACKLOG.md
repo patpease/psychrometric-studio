@@ -5,13 +5,12 @@ file — `PLAN.md` is the historical record and should not grow further.
 
 ## Open from the two-case work
 
-- **The combined report.** Exports are of the case on screen: a chart, a CSV, or
-  a PDF shows one operating case, and the filename now says which. What is not
-  built is the report that puts both in one document — the cooling and heating
-  chains side by side, with the equipment they share named once. This was always
-  the intended end state; the per-case export is the step before it, not a
-  substitute. Everything it needs is already in memory: `solvedSystems` holds
-  every case solved, not just the visible one.
+- **The combined report in PDF.** Shipped for chart and schedule: a *Both cases*
+  export writes the charts side by side and a CSV whose last section sets the
+  totals against each other. What is not done is teaching the report service the
+  same trick, because it is not deployed — building a two-case PDF today would
+  be building something nobody can see. `buildReportPayload` still describes one
+  case, and that is where it would start.
 - **More than two cases.** The format takes any number and the app carries them
   correctly — the migration, the validator, the file writer, and the solver are
   all written for a list. Two things assume a pair: the page turn is a two-sided
