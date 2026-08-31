@@ -879,16 +879,33 @@ body {
   overflow-x: auto;
 }
 
+/**
+ * Sized so six data columns fit the panel without scrolling.
+ *
+ * Dew point made it six, and at the previous 0.73rem/0.3rem the table needed
+ * 318px in a 298px column. Type alone could not close that, so the horizontal
+ * padding came down with it.
+ *
+ * The size is set by SI rather than IP, which is the harder case by some way:
+ * a winter state carries a minus sign on dry bulb, wet bulb, dew point AND
+ * enthalpy, and those four characters cost more width than the padding change
+ * gives back. At 0.64rem/0.2rem SI needs 291px of the 298 available, where IP
+ * needs 279. SI did not fit before dew point either -- five columns wanted
+ * 300px -- so this is the first arrangement that fits both.
+ *
+ * Both results tables share this: they sit one above the other, and type that
+ * changed size between them would read as a mistake.
+ */
 .results {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.73rem;
+  font-size: 0.64rem;
   font-variant-numeric: tabular-nums;
 }
 
 .results th,
 .results td {
-  padding: 0.22rem 0.3rem;
+  padding: 0.22rem 0.2rem;
   text-align: right;
   white-space: nowrap;
 }

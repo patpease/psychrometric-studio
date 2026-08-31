@@ -59,6 +59,7 @@ export function ResultsPanel({
                 <th>Tdb</th>
                 <th>Twb</th>
                 <th>RH</th>
+                <th>Tdp</th>
                 <th>W</th>
                 <th>h</th>
               </tr>
@@ -77,6 +78,7 @@ export function ResultsPanel({
                   <td>{formatTemperature(stage.result!.state.tdb, units)}</td>
                   <td>{formatTemperature(stage.result!.state.twb, units)}</td>
                   <td>{formatRelativeHumidity(stage.result!.state.rh)}</td>
+                  <td>{formatTemperature(stage.result!.state.tdp, units)}</td>
                   <td>{formatHumidityRatio(stage.result!.state.w, units)}</td>
                   <td>{formatEnthalpy(stage.result!.state.h, units)}</td>
                 </tr>
@@ -95,6 +97,7 @@ export function ResultsPanel({
                 <td>{LABELS[units].temperature}</td>
                 <td>{LABELS[units].temperature}</td>
                 <td>{LABELS[units].relativeHumidity}</td>
+                <td>{LABELS[units].temperature}</td>
                 <td>{LABELS[units].humidityRatio}</td>
                 <td>{LABELS[units].enthalpy}</td>
               </tr>

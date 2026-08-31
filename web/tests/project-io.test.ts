@@ -724,3 +724,55 @@ describe('export filenames', () => {
     expect(projectFilename({ name: 'Acme HQ' }, 'pdf', AUG)).toBe('acme-hq-2026-08-24.pdf');
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+describe('CSV columns line up with their headings', () => {
+  /**
+   * The existing CSV tests check that provenance, names, quoting and line
+   * endings are right, and none of them would notice if a column moved without
+   * its heading. That is the one CSV defect a reader cannot catch: every number
+   * is present and plausible, just filed under the wrong name — a dew point
+   * read as a relative humidity is 66 instead of 40, and nothing looks wrong.
+   */
+  const airstream = solve();
+  const csv = toCsv({
+    solved: airstream,
+    units: 'IP',
+    atmosphere: standardAtmosphere('IP'),
+    meta: { name: 'Test AHU' },
+    generated: new Date('2026-08-24T12:00:00.000Z'),
+  });
+
+  const section = csv.slice(csv.indexOf('# State points'), csv.indexOf('# Process loads'));
+  const rows = section.split('\r\n').filter((line) => line && !line.startsWith('#'));
+  const header = rows[0]!.split(',');
+  const first = rows[1]!.split(',');
+  const state = airstream.stages[0]!.result!.state;
+
+  /** The value filed under the one heading that starts with `label`. */
+  function underHeading(label: string): string {
+    const index = header.findIndex((cell) => cell.startsWith(label));
+    expect(index, `no "${label}" column in: ${header.join(' | ')}`).toBeGreaterThan(-1);
+    return first[index]!;
+  }
+
+  it('files each state property under its own heading', () => {
+    expect(Number(underHeading('Dry bulb'))).toBeCloseTo(state.tdb, 2);
+    expect(Number(underHeading('Wet bulb'))).toBeCloseTo(state.twb, 2);
+    expect(Number(underHeading('Relative humidity'))).toBeCloseTo(state.rh * 100, 1);
+    expect(Number(underHeading('Dew point'))).toBeCloseTo(state.tdp, 2);
+  });
+
+  it('orders dew point after relative humidity, as the panel does', () => {
+    const rh = header.findIndex((cell) => cell.startsWith('Relative humidity'));
+    const tdp = header.findIndex((cell) => cell.startsWith('Dew point'));
+    expect(tdp).toBe(rh + 1);
+  });
+
+  it('gives every heading a value and every value a heading', () => {
+    // Guards the lookup above: a row shorter than its header would let
+    // `underHeading` read undefined and quietly pass.
+    expect(first).toHaveLength(header.length);
+  });
+});
