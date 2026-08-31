@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { convertStages, convertComfort, convertAltitude } from '../src/ui/convertProject.js';
 import { solveSystem } from '../src/processes/index.js';
-import { DEFAULTS, powerAsDuty, type UnitSystem } from '../src/psych/units.js';
+import { DEFAULTS, powerAsDuty } from '../src/psych/units.js';
 import type { Stage, SystemDefinition } from '../src/types/project.js';
 
 const IP_STAGES: Stage[] = [

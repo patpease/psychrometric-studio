@@ -13,7 +13,7 @@ import {
   domainLimits,
   type ChartDomain,
 } from '../chart/scales.js';
-import { FAMILY_STYLES, DEFAULT_VISIBILITY, DRAW_ORDER } from '../chart/theme.js';
+import { FAMILY_STYLES, DRAW_ORDER } from '../chart/theme.js';
 import type { FamilyKey } from '../chart/families.js';
 import {
   atmosphereFromAltitude,
@@ -49,7 +49,7 @@ import {
 } from '../io/project.js';
 import { readFragment } from '../io/url.js';
 import type { ProjectMeta } from '../types/project.js';
-import { WeatherPanel, initialWeatherState, type WeatherState } from './WeatherPanel.js';
+import { WeatherPanel, type WeatherState } from './WeatherPanel.js';
 import { WeatherLayer } from '../chart/WeatherLayer.js';
 import { convertHoursTo, describeLocation } from '../weather/epw.js';
 import { convertAltitude, convertComfort, convertStages } from './convertProject.js';
@@ -420,7 +420,7 @@ export function App(): React.JSX.Element {
         return next;
       });
     }
-  }, [walkthroughStep, units]);
+  }, [walkthroughStep, units, setSelectedStage, setShowProtractor, setStages, setVisibility]);
 
   /**
    * The whole chain re-solves on every edit. It is a handful of closed-form
@@ -519,7 +519,7 @@ export function App(): React.JSX.Element {
         return copy;
       });
     },
-    [atmosphere.pressure, units],
+    [atmosphere.pressure, units, setStages],
   );
 
   /**
@@ -707,10 +707,13 @@ export function App(): React.JSX.Element {
   }, [session]);
 
   /** Selecting a component means "tell me about this", so it wins. */
-  const selectStage = useCallback((index: number | null) => {
-    setSelectedStage(index);
-    setTopicOverride(null);
-  }, []);
+  const selectStage = useCallback(
+    (index: number | null) => {
+      setSelectedStage(index);
+      setTopicOverride(null);
+    },
+    [setSelectedStage],
+  );
 
   /**
    * Which cases are drawn, and whether they can turn between each other.

@@ -31,7 +31,6 @@ import type { UnitSystem } from '../psych/units.js';
 import { pressureFromDisplay, pressureToDisplay } from '../psych/units.js';
 import {
   SCHEMA_VERSION,
-  systemLabel,
   type AtmosphereSpec,
   type Project,
   type ProjectMeta,

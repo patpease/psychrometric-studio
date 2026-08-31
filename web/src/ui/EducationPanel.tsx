@@ -14,7 +14,6 @@
  * is visible without anyone having to go looking for it. This is what the plan
  * meant by promoting `moves` from documentation into behaviour.
  */
-import { useState } from 'react';
 import { Icon } from '../icons/Icon.js';
 import {
   CONCEPT_GROUPS,

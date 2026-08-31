@@ -48,7 +48,7 @@ export function bisect(
   let a = lower;
   let b = upper;
   let fa = f(a);
-  let fb = f(b);
+  const fb = f(b);
 
   if (fa === 0) return a;
   if (fb === 0) return b;
@@ -70,8 +70,9 @@ export function bisect(
     if (fm === 0 || (b - a) / 2 < tolerance) return mid;
 
     if (fa * fm < 0) {
+      // Only `fa` is read from here on — the sign test above is against it —
+      // so the bracket's upper value is not carried forward.
       b = mid;
-      fb = fm;
     } else {
       a = mid;
       fa = fm;

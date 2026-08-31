@@ -467,7 +467,6 @@ export function ComfortPanel({
             units={units}
             indoor={settings.adaptiveIndoor}
             prevailing={settings.adaptivePrevailing}
-            result={adaptive}
           />
 
           {adaptive.comfort !== null ? (

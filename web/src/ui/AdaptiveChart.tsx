@@ -8,7 +8,7 @@
  * humidity and the personal factors, which is exactly why the model is narrow
  * in application.
  */
-import { adaptiveBands, ADAPTIVE_LIMITS, type AdaptiveResult } from '../comfort/adaptive.js';
+import { adaptiveBands, ADAPTIVE_LIMITS } from '../comfort/adaptive.js';
 import { fromCelsius } from '../comfort/pmv.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
 import { formatTemperature } from './format.js';
@@ -18,7 +18,6 @@ export interface AdaptiveChartProps {
   /** The operating point: indoor operative and prevailing outdoor temperature. */
   indoor: number;
   prevailing: number;
-  result: AdaptiveResult;
   width?: number;
   height?: number;
 }
@@ -29,7 +28,6 @@ export function AdaptiveChart({
   units,
   indoor,
   prevailing,
-  result,
   width = 288,
   height = 190,
 }: AdaptiveChartProps): React.JSX.Element {
