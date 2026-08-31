@@ -2328,8 +2328,17 @@ body {
  * the sheet itself has genuinely turned over.
  */
 .chart-sheet {
-  /* One definition of how long a turn takes. The face swap below happens at
-     exactly half of it, and the two must not drift apart. */
+  /* One definition of how long a turn takes, and the instant the faces swap.
+
+     The swap must land exactly when the sheet is edge-on, because that is the
+     only moment a face has no width and so cannot be seen mid-change. Half
+     the duration is that instant ONLY while the easing is symmetric — which
+     is why the curve below is, and why changing it is a change to this too.
+
+     It was not, once. An asymmetric curve had the sheet 75% turned at half
+     its duration, so for ~84ms the outgoing chart sat past 90 degrees showing
+     its own back: the original chart, mirrored, widening until the swap cut
+     it off. */
   --turn: 0.55s;
   --turn-half: 0.275s;
 
@@ -2340,7 +2349,10 @@ body {
      flatten into one plane — which is precisely the state in which both charts
      paint at once. */
   -webkit-transform-style: preserve-3d;
-  transition: transform var(--turn) cubic-bezier(0.42, 0.05, 0.25, 1);
+  /* Point-symmetric about its midpoint: (x1,y1) equals (1-x2,1-y2), so half
+     the duration is half the rotation and --turn-half above is correct by
+     construction rather than by a constant that has to be maintained. */
+  transition: transform var(--turn) cubic-bezier(0.42, 0, 0.58, 1);
 }
 
 /* Perspective belongs to the container the sheet turns inside, not the sheet:

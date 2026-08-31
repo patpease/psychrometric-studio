@@ -144,13 +144,33 @@ describe('only one chart face is ever painted', () => {
     expect(css).toMatch(/\.chart-face\.live \{\s*visibility:\s*visible;\s*\}/);
   });
 
+  const sheet = css.match(/\n\.chart-sheet \{[\s\S]*?\n\}/)?.[0] ?? '';
+
   it('swaps the faces half way through the turn, not at either end', () => {
     // At the ends one face is square to the reader and the swap would be seen.
-    // Half a turn in, the sheet is edge-on and neither face is legible.
-    const sheet = css.match(/\n\.chart-sheet \{[\s\S]*?\n\}/)?.[0] ?? '';
+    // Half a turn in, the sheet is edge-on and neither face has any width.
     const turn = sheet.match(/--turn:\s*([\d.]+)s/)?.[1];
     const half = sheet.match(/--turn-half:\s*([\d.]+)s/)?.[1];
     expect(turn, 'the turn has no declared duration').toBeDefined();
     expect(Number(half)).toBeCloseTo(Number(turn) / 2, 3);
+  });
+
+  it('turns on a symmetric curve, which is what makes that half-way point real', () => {
+    /**
+     * The check above is only meaningful while the easing is symmetric. Half
+     * the *duration* is half the *rotation* for a point-symmetric curve and for
+     * no other, and this shipped once with a curve that was not: the sheet was
+     * 75% turned at half its duration, so the outgoing chart spent ~84ms past
+     * 90 degrees showing its own mirrored back before the swap cut it off.
+     *
+     * A cubic-bezier is point-symmetric about (0.5, 0.5) when its two control
+     * points are reflections of each other: (x1, y1) === (1 - x2, 1 - y2).
+     */
+    const curve = sheet.match(/transition:[^;]*cubic-bezier\(([^)]+)\)/);
+    expect(curve, 'the sheet transition declares no cubic-bezier').not.toBeNull();
+
+    const [x1, y1, x2, y2] = curve![1]!.split(',').map((n) => Number(n.trim()));
+    expect(x1).toBeCloseTo(1 - x2!, 6);
+    expect(y1).toBeCloseTo(1 - y2!, 6);
   });
 });
