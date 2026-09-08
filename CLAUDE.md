@@ -118,6 +118,15 @@ the failure shapes this codebase produces.
 - **`?? []` in a prop.** It builds a new array every render, so a memoised child
   comparing props shallowly re-renders every time regardless. Share one frozen
   empty value.
+- **Two parameters that name the same property.** A source stage stores dry
+  bulb plus *one* moisture property. Relative humidity, wet bulb and dew point
+  are three names for the same thing, and `parseStateInput` takes the first it
+  finds. Left to accumulate, a wet bulb typed over an existing relative humidity
+  is stored, displayed, and then ignored — the field and the results table
+  showing two different wet bulbs. Every write goes through `withParams`
+  (`ui/stageFields.ts`), which clears the siblings; there are three such write
+  paths, and the two that are easy to forget are the design-day picker and
+  dragging the point on the chart.
 - **The walkthrough writing over a real design.** It builds a worked example on
   top of the chain that is there. It now runs on the cooling case by role,
   snapshots what it covered, and puts it back on exit.

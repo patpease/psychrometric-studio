@@ -29,6 +29,7 @@ import { DEFAULT_VISIBILITY } from '../chart/theme.js';
 import { defaultDomain } from '../chart/scales.js';
 import type { UnitSystem } from '../psych/units.js';
 import { pressureFromDisplay, pressureToDisplay } from '../psych/units.js';
+import { MOISTURE_PARAMS } from '../processes/models/source.js';
 import {
   SCHEMA_VERSION,
   type AtmosphereSpec,
@@ -297,6 +298,37 @@ export function fromProject(project: Project): SessionState {
   };
 }
 
+/**
+ * Settle an entering condition that names its moisture more than one way.
+ *
+ * Until the editor kept these exclusive, typing a wet bulb over a stage that
+ * already carried a relative humidity left **both** in the file. The solver
+ * took the relative humidity and ignored the wet bulb — but the wet bulb box
+ * went on displaying the number that was doing nothing, so the stage said two
+ * contradictory things at once.
+ *
+ * Reading such a file keeps the property that actually decided the answer, in
+ * `MOISTURE_PARAMS` order, and drops the rest. The project therefore solves to
+ * exactly the numbers it has always solved to, and the ignored value stops
+ * being shown as though it were an input. Files already carrying one property —
+ * every file written since — pass through untouched.
+ */
+function settleEnteringCondition(stage: Stage): Stage {
+  if (stage.type !== 'source') return stage;
+
+  const params = stage.params;
+  if (!params) return stage;
+
+  const named = MOISTURE_PARAMS.filter((key) => typeof params[key] === 'number');
+  if (named.length < 2) return stage;
+
+  // The first is the one the solver would have used; the rest were inert.
+  const settled = { ...params };
+  for (const key of named.slice(1)) delete settled[key];
+
+  return { ...stage, params: settled };
+}
+
 /** One system, read back with every optional field resolved to a value. */
 function systemFromFile(system: SystemDefinition, units: UnitSystem): SessionSystem {
   const fallbackDomain = defaultDomain(units);
@@ -320,7 +352,7 @@ function systemFromFile(system: SystemDefinition, units: UnitSystem): SessionSys
     // Only the supply stream is editable in this build. A multi-airstream
     // system is valid and its other streams are preserved on the project
     // object; the editor simply does not show them yet.
-    stages: system.airstreams[0]?.stages ?? [],
+    stages: (system.airstreams[0]?.stages ?? []).map(settleEnteringCondition),
     domain: { tdbMin: tdbMin!, tdbMax: tdbMax!, wMin: wMin!, wMax: wMax! },
     visibility: {
       // Saturation is not optional — it is the boundary of the region the chart

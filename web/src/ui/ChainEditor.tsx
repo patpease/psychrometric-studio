@@ -17,6 +17,7 @@ import {
   fromFieldValue,
   toFieldValue,
   unitLabelFor,
+  withParams,
   type ParamField,
 } from './stageFields.js';
 import type { StageResult } from '../processes/types.js';
@@ -92,16 +93,15 @@ export interface ChainEditorProps {
  * would have had if the numbers were typed. Nothing about the stage becomes
  * special: the fields stay editable, and editing one simply means it no longer
  * matches the design day.
+ *
+ * Through `withParams`, so that a wet bulb or dew point typed earlier is
+ * cleared rather than left behind to outrank the condition just chosen.
  */
 function applyDesignDay(stage: Stage, day: DesignDay): Stage {
-  return {
-    ...stage,
-    params: {
-      ...(stage.params ?? {}),
-      tdb: Number(day.state.tdb.toFixed(2)),
-      rh: Number(day.state.rh.toFixed(4)),
-    },
-  };
+  return withParams(stage, {
+    tdb: Number(day.state.tdb.toFixed(2)),
+    rh: Number(day.state.rh.toFixed(4)),
+  });
 }
 
 /** Is this stage currently sitting on that design condition? */
@@ -408,12 +408,7 @@ export function ChainEditor({
                       stage={stage}
                       units={units}
                       result={result?.result}
-                      onChange={(key, value) => {
-                        const params = { ...(stage.params ?? {}) };
-                        if (value === undefined) delete params[key];
-                        else params[key] = value;
-                        update(index, { ...stage, params });
-                      }}
+                      onChange={(key, value) => update(index, withParams(stage, { [key]: value }))}
                     />
                   ))}
 

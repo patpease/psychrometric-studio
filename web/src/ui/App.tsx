@@ -27,6 +27,7 @@ import { fromTdbW, saturationHumidityRatio } from '../psych/state.js';
 import { CALCULATION_BASIS } from '../psych/psychrolib.js';
 import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
 import { ChainEditor } from './ChainEditor.js';
+import { withParams } from './stageFields.js';
 import { Collapsible } from './Collapsible.js';
 import { EducationPanel } from './EducationPanel.js';
 import { WalkthroughPanel } from './WalkthroughPanel.js';
@@ -525,10 +526,10 @@ export function App(): React.JSX.Element {
 
         const state = fromTdbW(tdb, w, atmosphere.pressure, units);
         const copy = [...current];
-        copy[index] = {
-          ...stage,
-          params: { ...(stage.params ?? {}), tdb: Number(tdb.toFixed(2)), rh: state.rh },
-        };
+        // Through `withParams`: the drag says where the point *is*, so a wet
+        // bulb or dew point typed earlier has to give way, or the point would
+        // refuse to move.
+        copy[index] = withParams(stage, { tdb: Number(tdb.toFixed(2)), rh: state.rh });
         return copy;
       });
     },

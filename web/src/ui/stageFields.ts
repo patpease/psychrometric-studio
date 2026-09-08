@@ -7,8 +7,9 @@
  * field, so the editor can render every field as optional and let the solver
  * explain what a given stage still needs.
  */
-import type { StageType } from '../types/project.js';
+import type { Stage, StageType } from '../types/project.js';
 import type { StageResult } from '../processes/types.js';
+import { MOISTURE_PARAMS } from '../processes/models/source.js';
 import type { UnitSystem } from '../psych/units.js';
 import { LABELS } from '../psych/units.js';
 
@@ -320,6 +321,62 @@ export const STAGE_FIELDS: Partial<Record<StageType, StageFields>> = {
     ],
   },
 };
+
+/**
+ * Parameters that say the same thing in different terms, so a stage may carry
+ * only one of them at a time.
+ *
+ * The entering condition is the case that matters. Dry bulb is always an input;
+ * relative humidity, wet bulb and dew point are three ways of naming the *same*
+ * second property, and the state engine takes exactly one. Left to accumulate,
+ * a typed wet bulb sits in the stage next to the relative humidity it was meant
+ * to replace, the engine picks by a fixed priority, and the number the user
+ * entered is silently ignored while the field still displays it — the screen
+ * showing two different wet bulbs at once.
+ *
+ * So writing one of these clears its siblings, which turns them back into
+ * *calculated* values: the field empties, and the placeholder shows what the
+ * new input works out to.
+ */
+const EXCLUSIVE_GROUPS: Partial<Record<StageType, readonly (readonly string[])[]>> = {
+  source: [MOISTURE_PARAMS],
+};
+
+/**
+ * Write parameters onto a stage, honouring those exclusive groups.
+ *
+ * Every path that edits a stage's parameters goes through here — the field
+ * editor, the design-condition picker, and dragging a state point around the
+ * chart — because the invariant has to hold whichever one the user reached for.
+ *
+ * An `undefined` value clears its own field and nothing else: emptying the wet
+ * bulb box means "I no longer specify this", not "discard the dew point too".
+ */
+export function withParams(
+  stage: Stage,
+  changes: Readonly<Record<string, number | boolean | undefined>>,
+): Stage {
+  const params: Record<string, unknown> = { ...(stage.params ?? {}) };
+  const groups = EXCLUSIVE_GROUPS[stage.type] ?? [];
+
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === undefined) {
+      delete params[key];
+      continue;
+    }
+
+    params[key] = value;
+
+    for (const group of groups) {
+      if (!group.includes(key)) continue;
+      for (const sibling of group) {
+        if (sibling !== key) delete params[sibling];
+      }
+    }
+  }
+
+  return { ...stage, params };
+}
 
 /** The unit label for a field, or an empty string when it is dimensionless. */
 export function unitLabelFor(field: ParamField, units: UnitSystem): string {

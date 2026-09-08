@@ -19,6 +19,18 @@ export interface SourceParams {
 }
 
 /**
+ * The moisture properties, in the order this model prefers them.
+ *
+ * A moist-air state is fixed by dry bulb plus **exactly one** of these. Storing
+ * two is not extra information, it is a contradiction — and one of them has to
+ * lose. The editor keeps a source stage down to one at a time (see
+ * `withParams` in the UI layer); this order decides what happens to a file that
+ * arrived carrying more than one anyway, and it is the order this model has
+ * always used, so an old project solves to the numbers it always did.
+ */
+export const MOISTURE_PARAMS = ['rh', 'twb', 'tdp', 'w', 'h'] as const;
+
+/**
  * Accept any of the pairs the state engine supports, so a user can enter the
  * condition in whatever form their data arrived in rather than converting by
  * hand first.
@@ -28,17 +40,33 @@ function parseStateInput(raw: unknown): StateInput {
   const number = (key: string): number | undefined => optionalNumber(record, key);
 
   const tdb = number('tdb');
+
+  if (tdb !== undefined) {
+    for (const key of MOISTURE_PARAMS) {
+      const value = number(key);
+      if (value === undefined) continue;
+      switch (key) {
+        case 'rh':
+          return { kind: 'tdb-rh', tdb, rh: value };
+        case 'twb':
+          return { kind: 'tdb-twb', tdb, twb: value };
+        case 'tdp':
+          return { kind: 'tdb-tdp', tdb, tdp: value };
+        case 'w':
+          return { kind: 'tdb-w', tdb, w: value };
+        case 'h':
+          return { kind: 'tdb-h', tdb, h: value };
+      }
+    }
+  }
+
+  // Pairs that do not involve dry bulb at all. Not offered by the editor, but
+  // a hand-written or machine-generated file may carry them.
   const rh = number('rh');
   const twb = number('twb');
-  const tdp = number('tdp');
   const w = number('w');
   const h = number('h');
 
-  if (tdb !== undefined && rh !== undefined) return { kind: 'tdb-rh', tdb, rh };
-  if (tdb !== undefined && twb !== undefined) return { kind: 'tdb-twb', tdb, twb };
-  if (tdb !== undefined && tdp !== undefined) return { kind: 'tdb-tdp', tdb, tdp };
-  if (tdb !== undefined && w !== undefined) return { kind: 'tdb-w', tdb, w };
-  if (tdb !== undefined && h !== undefined) return { kind: 'tdb-h', tdb, h };
   if (twb !== undefined && rh !== undefined) return { kind: 'twb-rh', twb, rh };
   if (h !== undefined && w !== undefined) return { kind: 'h-w', h, w };
 
