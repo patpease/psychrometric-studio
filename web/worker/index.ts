@@ -53,6 +53,27 @@ export default {
 
     const response = await env.ASSETS.fetch(request);
 
+    // A MISSING HASHED ASSET MUST NOT COME BACK AS THE APPLICATION SHELL.
+    //
+    // `not_found_handling: "single-page-application"` is what makes deep links
+    // work, and it also answers a missing /assets/xyz.js with 200 and the HTML
+    // of index.html — which public/_headers then stamps
+    // "max-age=31536000, immutable" because it matches on the path.
+    //
+    // The browser refuses to execute HTML as a module (nosniff, strict MIME),
+    // so nothing runs; and it caches that HTML at the script URL FOR A YEAR.
+    // The result is a permanently blank page that a reload cannot fix, and
+    // every deploy has a window that can produce it. A 404 is the honest
+    // answer for a hashed asset that is not there.
+    const isHashedAsset = new URL(request.url).pathname.startsWith('/assets/');
+    const servedHtml = (response.headers.get('Content-Type') ?? '').includes('text/html');
+    if (isHashedAsset && servedHtml) {
+      return new Response(null, {
+        status: 404,
+        headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+      });
+    }
+
     // A FAILURE MUST NEVER INHERIT THE IMMUTABLE CACHE RULE.
     //
     // public/_headers matches on the PATH, not on the outcome, so a 404 under
