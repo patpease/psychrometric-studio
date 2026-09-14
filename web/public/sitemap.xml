@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One route. The tool is a single page whose whole state lives in the URL
+  fragment and in memory, so there is nothing else for a crawler to reach.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://psychrometric.peasestudio.com/</loc>
+  </url>
+</urlset>

@@ -19,23 +19,32 @@
     <link rel="manifest" href="/site.webmanifest" />
 
     <!--
-      Social preview. `og:url` is deliberately absent: this build is served from
-      whatever host Pages gives it, and a hard-coded canonical that disagrees
-      with the address bar is worse than none — it tells crawlers the page lives
-      somewhere it does not. Add it here once a custom domain is settled.
+      The custom domain is settled, so the canonical can finally be stated. The
+      tool also answers on its *.pages.dev address, and without this both hosts
+      are indexable copies of the same page competing with each other.
+    -->
+    <link rel="canonical" href="https://psychrometric.peasestudio.com/" />
 
-      The image is the square app icon rather than a 1200x630 card. Square is
-      handled correctly by every major unfurler; a card cropped from artwork
-      never drawn for it is not.
+    <!--
+      Social preview. The image is the square app icon rather than a 1200x630
+      card: square is handled correctly by every major unfurler; a card cropped
+      from artwork never drawn for it is not.
+
+      og:image is absolute. A root-relative path is resolved against the
+      unfurler's own host by several of them, which fetches nothing.
     -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Psychrometric Studio" />
     <meta property="og:title" content="Psychrometric Studio" />
+    <meta property="og:url" content="https://psychrometric.peasestudio.com/" />
     <meta
       property="og:description"
       content="Solve an air-handling chain on a psychrometric chart, check it against ASHRAE 55, and count a year of weather against it. Everything runs in your browser."
     />
-    <meta property="og:image" content="/brand/psychrometric-studio-icon-1024.png" />
+    <meta
+      property="og:image"
+      content="https://psychrometric.peasestudio.com/brand/psychrometric-studio-icon-1024.png"
+    />
     <meta name="twitter:card" content="summary" />
 
     <!--

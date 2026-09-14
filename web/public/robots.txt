@@ -1,3 +1,5 @@
 # Everything here is a public tool with no user data and nothing behind a login.
 User-agent: *
 Allow: /
+
+Sitemap: https://psychrometric.peasestudio.com/sitemap.xml

@@ -249,6 +249,16 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-muted);
+  /* A link, but the endorsement should not read as a call to action: no
+     underline until it is hovered or focused. */
+  text-decoration: none;
+  width: fit-content;
+}
+
+.brand-org:hover,
+.brand-org:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .brand-tagline {

@@ -15,6 +15,12 @@ export const APP_VERSION = '0.1.0';
 export const BRAND = {
   /** The parent identity, shown as an endorsement above the product name. */
   organisation: 'Pease Studio',
+  /**
+   * Where that endorsement points. The tool sits on its own domain, so this
+   * link is the only route a reader — or a crawler — has from here back to the
+   * studio that publishes it.
+   */
+  organisationUrl: 'https://peasestudio.com/',
   appName: 'Psychrometric Studio',
   tagline: 'Moist-air analysis for real buildings',
   /**

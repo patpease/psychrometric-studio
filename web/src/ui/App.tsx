@@ -807,7 +807,9 @@ export function App(): React.JSX.Element {
             <img className="brand-icon" src={BRAND.icon.light} alt="" width={38} height={38} />
           </picture>
           <div className="brand-text">
-            <span className="brand-org">{BRAND.organisation}</span>
+            <a className="brand-org" href={BRAND.organisationUrl}>
+              {BRAND.organisation}
+            </a>
             <h1>{BRAND.appName}</h1>
             <span className="brand-tagline">{BRAND.tagline}</span>
           </div>
