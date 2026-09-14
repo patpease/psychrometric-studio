@@ -539,17 +539,6 @@ body {
   color: var(--accent);
 }
 
-.panel-footer {
-  border-bottom: 0;
-}
-
-.panel-footer p {
-  margin: 0 0 0.35rem;
-  font-size: 0.72rem;
-  color: var(--ink-muted);
-  line-height: 1.4;
-}
-
 .disclaimer {
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
@@ -2495,4 +2484,83 @@ body {
 
 .feedback-copied {
   color: var(--accent);
+}
+
+.site-footer {
+  --footer-muted: var(--ink-muted);
+  --footer-accent: var(--accent);
+  /* The shell is full-bleed, so the footer supplies the gutter the header
+     already has, and the surface so it reads as chrome rather than page. */
+  padding: 16px 1.25rem;
+  background: var(--surface);
+}
+
+/* --- studio footer ---------------------------------------------------
+   Ported from peasestudio.com's BaseLayout. Everything below the two
+   custom properties above is identical in all three tools; those two are
+   the whole of the difference between their palettes. */
+
+.site-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.footer-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.footer-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.footer-year {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--footer-muted);
+}
+
+.footer-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.footer-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--footer-muted);
+  text-decoration: none;
+}
+
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: var(--footer-accent);
+}
+
+/* The support link is the only one asking for something, so it carries the
+   accent at rest. The profile links stay muted; if everything is emphasised
+   nothing is. */
+.footer-links a[data-icon='coffee'] {
+  color: var(--footer-accent);
+}
+
+@media (max-width: 640px) {
+  .site-footer {
+    flex-direction: column;
+    gap: 16px;
+  }
 }

@@ -25,8 +25,15 @@
  *
  * ## What it does not do
  *
- * **This is a speed bump, not a wall.** A crawler that renders the page and
- * clicks things — and more of them do every year — gets the address anyway. The
+ * **Since the studio footer landed, it does not keep the address off this page
+ * either.** That footer carries a plain `mailto:`, as it does on every
+ * peasestudio.com page, where the address has been published openly all along.
+ * What survives here is the pre-addressed message below — subject, build
+ * version, unit system — which is worth keeping on its own account. The
+ * obfuscation is retained because removing it would buy nothing back.
+ *
+ * **This was always a speed bump, not a wall.** A crawler that renders the page
+ * and clicks things — and more of them do every year — gets the address. The
  * only way to keep an address off a public page is to not put it there: a form
  * that posts to a server which holds the address as a secret. That is a real
  * option here and is written up in `docs/deploying.md`; it costs a route, an

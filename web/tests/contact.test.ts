@@ -46,17 +46,20 @@ describe('the feedback address', () => {
     expect(source).not.toContain(ADDRESS.split('@')[1]!);
   });
 
-  it('never appears whole anywhere in the source tree', () => {
-    for (const file of [
-      '../src/ui/FeedbackPanel.tsx',
-      '../src/ui/App.tsx',
-      '../src/config/branding.ts',
-    ]) {
-      expect(read(file), `${file} contains the address in plain text`).not.toContain(
-        ADDRESS,
-      );
-    }
-  });
+  /*
+   * The tree-wide version of this test is gone, deliberately.
+   *
+   * It used to cover branding.ts as well, and the studio footer now carries a
+   * plain `mailto:` there — the same footer every peasestudio.com page has, and
+   * that site has published the address openly in its own footer since launch.
+   * A speed bump on one of four public surfaces is not a speed bump; it is only
+   * a rule that fails a build.
+   *
+   * contact.ts keeps its obfuscation, because it still assembles the
+   * pre-addressed message with the build version and unit system in it, and the
+   * test below still holds it to not spelling the address out. What is no
+   * longer claimed is that the address is absent from the running page.
+   */
 });
 
 describe('the pre-addressed message', () => {

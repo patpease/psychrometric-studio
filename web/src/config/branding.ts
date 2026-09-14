@@ -84,3 +84,33 @@ export function provenanceStamp(now: Date = new Date()): ProvenanceStamp {
     disclaimer: DISCLAIMER_SHORT,
   };
 }
+
+/**
+ * The studio footer's links — the same set, in the same order, as the footer on
+ * peasestudio.com. Kept here beside the rest of the identity rather than
+ * imported, because the site is a separate repo and a separate deploy.
+ *
+ * Privacy points at the studio's policy: one studio, one policy, and it already
+ * covers the tools by saying nothing is collected anywhere.
+ */
+export type FooterLink = {
+  readonly label: string;
+  readonly href: string;
+  /** Drawn inline. A deliberately closed set: a footer of icons is noise. */
+  readonly icon?: 'coffee';
+};
+
+export const FOOTER_LINKS: readonly FooterLink[] = [
+  { label: 'Privacy', href: 'https://peasestudio.com/privacy/' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/patrick-pease-eng/' },
+  { label: 'GitHub', href: 'https://github.com/patpease' },
+  { label: 'Email', href: 'mailto:peasestudio@gmail.com' },
+  {
+    label: 'Buy me a coffee',
+    href: 'https://buymeacoffee.com/peasestudio',
+    icon: 'coffee',
+  },
+];
+
+/** Alias so SiteFooter.tsx is identical across the tools. */
+export const STUDIO_NAME = BRAND.organisation;

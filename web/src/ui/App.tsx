@@ -24,8 +24,8 @@ import {
 } from '../psych/atmosphere.js';
 import { LABELS, type UnitSystem } from '../psych/units.js';
 import { fromTdbW, saturationHumidityRatio } from '../psych/state.js';
-import { CALCULATION_BASIS } from '../psych/psychrolib.js';
-import { BRAND, APP_VERSION, DISCLAIMER_SHORT } from '../config/branding.js';
+import { SiteFooter } from './SiteFooter.js';
+import { BRAND } from '../config/branding.js';
 import { ChainEditor } from './ChainEditor.js';
 import { withParams } from './stageFields.js';
 import { Collapsible } from './Collapsible.js';
@@ -1161,17 +1161,14 @@ export function App(): React.JSX.Element {
           </Collapsible>
 
           <FeedbackPanel units={units} />
-
-          <footer className="panel-footer">
-            <p>
-              {CALCULATION_BASIS.library} {CALCULATION_BASIS.version} — {CALCULATION_BASIS.reference}
-            </p>
-            <p>Version {APP_VERSION}</p>
-            <p className="disclaimer">{DISCLAIMER_SHORT}</p>
-          </footer>
         </aside>
       </main>
     </div>
+    {/* Outside .app deliberately. That element is height-locked to the viewport
+        and the chart pane sizes itself against it through a ResizeObserver, so
+        the footer sits after it as a sibling and the page scrolls by exactly
+        the footer's height. Nothing about the chart's bounds changes. */}
+    <SiteFooter />
     </EducationContext.Provider>
   );
 }
