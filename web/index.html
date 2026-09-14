@@ -26,9 +26,10 @@
     <link rel="canonical" href="https://psychrometric.peasestudio.com/" />
 
     <!--
-      Social preview. The image is the square app icon rather than a 1200x630
-      card: square is handled correctly by every major unfurler; a card cropped
-      from artwork never drawn for it is not.
+      Social preview. A 1200x630 card drawn for the purpose, which replaces the
+      square app icon that stood in while there was none: the earlier note said
+      a card cropped from artwork never drawn for it was worse than a square,
+      and it was — this one is not cropped from anything.
 
       og:image is absolute. A root-relative path is resolved against the
       unfurler's own host by several of them, which fetches nothing.
@@ -41,11 +42,10 @@
       property="og:description"
       content="Solve an air-handling chain on a psychrometric chart, check it against ASHRAE 55, and count a year of weather against it. Everything runs in your browser."
     />
-    <meta
-      property="og:image"
-      content="https://psychrometric.peasestudio.com/brand/psychrometric-studio-icon-1024.png"
-    />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="https://psychrometric.peasestudio.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <!--
       No analytics, no fonts, no tags. The tool has no accounts and keeps
