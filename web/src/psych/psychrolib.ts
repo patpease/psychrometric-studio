@@ -138,3 +138,33 @@ export const CALCULATION_BASIS = {
   reference: 'ASHRAE Handbook — Fundamentals, Chapter 1 (2017)',
   sha256: 'a46572b93a90263b8e19e8d1372fe3135429aa9611cd57e00674188640cc96c9',
 } as const;
+
+/**
+ * How PsychroLib asks to be cited.
+ *
+ * Two entries, because the project asks for two: the software summary paper,
+ * and **the version actually in use** — each with its own DOI. A concept DOI
+ * pointing at "whatever is latest" would be the easy thing to write and the
+ * wrong thing to publish, since the numbers in a report came from one release
+ * and no other.
+ *
+ * Written in the same form as the weather citation the About panel already
+ * carries — authors, year, title, source, DOI — so the two read as one
+ * bibliography rather than as two libraries' house styles.
+ *
+ * `version` below must move with `CALCULATION_BASIS.version`; the DOI is the
+ * per-release one from Zenodo, not the concept DOI.
+ * `tests/calculation-basis.test.ts` fails if the two disagree.
+ */
+export const PSYCHROLIB_CITATION = {
+  /** The software summary paper. */
+  paper:
+    'Meyer, D., D. Thevenard. 2019. PsychroLib: a library of psychrometric ' +
+    'functions to calculate thermodynamic properties of air. Journal of Open ' +
+    'Source Software 4(33): 1137. https://doi.org/10.21105/joss.01137',
+  /** The release this tool is built on. */
+  software:
+    'Meyer, D., D. Thevenard. 2020. PsychroLib (v2.5.0). ' +
+    'https://doi.org/10.5281/zenodo.3748874',
+  version: '2.5.0',
+} as const;

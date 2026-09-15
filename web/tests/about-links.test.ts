@@ -59,6 +59,17 @@ function manifestOf(
   try {
     return require_(`${name}/package.json`) as { version: string };
   } catch {
+    /* Falls through to the directory read below. */
+  }
+
+  // A package with an `exports` map that does not list `./package.json` cannot
+  // be resolved by name, and `jspdf-autotable` is one. Without this the credit
+  // would be skipped rather than checked — which is the exact failure the top
+  // of this file exists to prevent, wearing a different hat.
+  try {
+    const onDisk = fileURLToPath(new URL(`../node_modules/${name}/package.json`, import.meta.url));
+    return JSON.parse(readFileSync(onDisk, 'utf8')) as { version: string };
+  } catch {
     return null; // Vendored, or credited under a different name.
   }
 }
@@ -73,6 +84,9 @@ describe('about panel credits', () => {
       'PsychroLib',
       'jsthermalcomfort',
       'fflate',
+      'jsPDF',
+      'svg2pdf.js',
+      'jspdf-autotable',
       'React',
     ]);
   });

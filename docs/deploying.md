@@ -10,8 +10,8 @@ CORS header, so a browser cannot read a response from it however the request is
 phrased. Nothing is stored; the bytes pass through and are unzipped in the
 browser exactly as a dropped file would be.
 
-The PDF report service is optional and **v1 ships without it**. The tool detects
-its absence and hides the one button that needs it.
+Every export, the PDF report included, runs in the reader's browser. There is no
+second service to stand up and nothing to configure for it.
 
 ---
 
@@ -74,16 +74,17 @@ service:
 
 | Variable | When to set it | Effect |
 |---|---|---|
-| `VITE_API_URL` | Only once a report service is deployed | Origin of the service, e.g. `https://api.example.com`. No trailing slash. |
+| — | — | The front end needs none. |
 
-Unset means *there is no service*. The application then skips the health check
-entirely and does not offer PDF export.
+There were two, both for the report service that no longer exists. A deploy is
+the bundle and nothing else.
 
-> An earlier build defaulted this to `http://localhost:8000` so a fresh checkout
-> would work without configuration. That is actively wrong in production: the
-> URL resolves in the **visitor's** browser, so every page load would probe port
-> 8000 on their machine. Development sets it in `web/.env.development`, which is
-> checked in because it is not a secret.
+> One of them, `VITE_API_URL`, is worth remembering for the shape of the mistake
+> rather than the variable. It named the report service's origin, and an early
+> build defaulted it to `http://localhost:8000` so that a fresh checkout would
+> work unconfigured. That is actively wrong once deployed: the URL resolves in
+> the **visitor's** browser, so every page load probed port 8000 on their own
+> machine. Any future build-time URL has the same trap in it.
 
 ### The weather relay
 
@@ -133,8 +134,8 @@ exceptions, each with a reason recorded beside it in the file:
 - `style-src 'unsafe-inline'` — React writes inline style attributes and the
   chart sets stroke and fill per element. There is no way to hash those.
 - `connect-src 'self'` — covers the weather relay, which is same-origin by
-  design. **Must be widened if a report service is deployed**, or the browser
-  blocks that request no matter what `VITE_API_URL` says.
+  design. Nothing else in the tool talks to anything: the PDF report is drawn in
+  the browser, so this line needs no exception and should not acquire one.
 
 The policy was verified against a production build with every export exercised:
 project file, CSV, SVG, PNG, and share link, with zero violations.
@@ -147,51 +148,27 @@ When one is settled, two things change:
    `web/index.html`. Both are deliberately absent now — a hard-coded canonical
    that disagrees with the address bar tells crawlers the page lives somewhere
    it does not.
-2. Add the domain to `PSYCHRO_ALLOWED_ORIGINS` on the report service, if one is
-   running.
+2. Nothing else — there is no second origin to tell about the move.
 
 ---
 
-## The report service — when you want it
+## The report — nothing to deploy
 
-Not deployed for v1. The code is complete, tested, and ready.
+The PDF report is generated in the reader's browser by jsPDF, so there is no
+service, no environment variable, and no `connect-src` exception to remember.
+It works on a plain static deploy the moment the bundle is up.
 
-```bash
-cd api
-python -m venv .venv
-.venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m uvicorn app.main:app --port 8000
-```
+It did not always. Through v1.0 the report was rendered by a FastAPI service in
+`api/`, which was written, tested, and never once deployed — which is the honest
+measure of what an always-on process costs a tool like this. Moving the
+rendering into the browser removed a container, a cold start, a CORS rule and a
+permanent hole in the content security policy, and it made "nothing is uploaded"
+literally true rather than true-because-the-service-is-off. That directory and
+its CI job are gone; the history is in `PLAN.md` and in the log.
 
-It is a stateless FastAPI application that renders a PDF from JSON and keeps
-nothing. It **lays out; it does not calculate** — every number arrives already
-solved from the browser, which is what keeps the report and the on-screen chart
-in agreement.
-
-### Its environment variable
-
-| Variable | Default | Effect |
-|---|---|---|
-| `PSYCHRO_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:5183` | Comma-separated origins allowed to call the service. |
-
-This must name the deployed front end exactly — scheme, host, and port if
-non-standard. A wildcard would make the service an open renderer for anyone's
-traffic, which is why there is no default that would allow one.
-
-### Deploying it
-
-Any container host will do; it needs one small always-on process. Three things
-to get right:
-
-1. `PSYCHRO_ALLOWED_ORIGINS` set to the front end's origin.
-2. `VITE_API_URL` set to the service's origin **at front-end build time** — it
-   is compiled into the bundle, so changing it needs a rebuild, not a restart.
-3. `connect-src` in `web/public/_headers` widened to include the service origin.
-
-Miss the third and the button appears and then fails, which is the worst of the
-three outcomes. Miss the first and the browser refuses the request. Miss the
-second and the button never appears at all — the safe failure, and the one the
-tool is designed around.
+One consequence worth knowing: the three PDF libraries come to about 155 kB
+gzipped and are fetched on the first click rather than on every visit. That is
+the one feature in the tool that needs the network after first load.
 
 ---
 
@@ -237,5 +214,5 @@ address is being harvested; not worth it before.
 - Save, CSV, SVG, PNG, and a share link all produce files.
 - Following a share link opens the project and clears the fragment.
 - The browser console is clean — in particular, no CSP violations.
-- If no report service is deployed, the export panel says so plainly and offers
-  no PDF button.
+- The PDF report downloads two pages for a two-case project, with the chart as
+  selectable vector and the footer stamp on both pages.

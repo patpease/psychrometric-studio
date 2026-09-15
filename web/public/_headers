@@ -11,9 +11,9 @@
   #     URI, then loads the serialised SVG through a blob URL to rasterise it.
   #   style-src 'unsafe-inline' — React writes inline style attributes, and the
   #     chart sets stroke and fill per element. There is no way to hash those.
-  #   connect-src 'self' — this build ships without the report service. If one
-  #     is deployed later, its origin must be added here or the browser will
-  #     block the request. See docs/deploying.md.
+  #   connect-src 'self' — the weather relay is same-origin and nothing else
+  #     makes a request at all. The PDF report is drawn in the browser, which is
+  #     what keeps this line free of exceptions.
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

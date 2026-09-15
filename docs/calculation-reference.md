@@ -22,6 +22,21 @@ Every export carries the application version, library version, barometric
 pressure, and unit system, so any result can be traced to the code that produced
 it.
 
+PsychroLib asks to be cited as the summary paper **and** the release in use:
+
+> Meyer, D., D. Thevenard. 2019. PsychroLib: a library of psychrometric
+> functions to calculate thermodynamic properties of air. *Journal of Open
+> Source Software* 4(33): 1137. https://doi.org/10.21105/joss.01137
+>
+> Meyer, D., D. Thevenard. 2020. PsychroLib (v2.5.0).
+> https://doi.org/10.5281/zenodo.3748874
+
+The second DOI is the one minted for 2.5.0, not the concept DOI that resolves to
+whatever is newest — the numbers in a report came from one release and no other.
+Both strings live in `CALCULATION_BASIS`'s neighbour `PSYCHROLIB_CITATION`, and
+a test fails if the version in the software DOI line stops matching the version
+in use.
+
 ## 2. State determination
 
 A moist-air state is fully determined by **dry-bulb temperature, humidity ratio,

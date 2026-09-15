@@ -10,6 +10,7 @@
 | Fetched | 2026-08-22 |
 | Licence | MIT — see `psychrolib.LICENSE.txt` |
 | Modified | **No.** Byte-identical to upstream. |
+| Cite as | Meyer & Thevenard 2019, [10.21105/joss.01137](https://doi.org/10.21105/joss.01137) — and this release, [10.5281/zenodo.3748874](https://doi.org/10.5281/zenodo.3748874) |
 
 Verify or refresh with `scripts/vendor-psychrolib.sh`. CI runs the verify form
 on every build, so an unnoticed change to the calculation basis fails the build.

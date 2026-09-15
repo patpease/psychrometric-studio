@@ -11,7 +11,7 @@
  * that cannot be traced to the release that produced it is a liability, and
  * these files outlive the session that made them.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { SolvedAirstream } from '../processes/chain.js';
 import type { Atmosphere } from '../psych/atmosphere.js';
 import type { ChartDomain, ChartMargin } from '../chart/scales.js';
@@ -29,14 +29,15 @@ import {
 import { shareLink } from '../io/url.js';
 import { toCsv, toCombinedCsv } from '../io/csv.js';
 import {
-  chartToBase64Png,
   chartToPng,
+  chartToReportSvg,
   chartToSvg,
   chartsToPng,
   chartsToSvg,
 } from '../io/image.js';
 import { downloadBlob, downloadText } from '../io/download.js';
-import { API_BASE, buildReportPayload, reportServiceAvailable, requestReport } from '../io/report.js';
+import { buildReportPayload } from '../io/report.js';
+import { REPORT_QUALIFIER, reportToPdf } from '../io/pdf.js';
 import { DISCLAIMER } from '../config/branding.js';
 
 export interface ExportPanelProps {
@@ -121,24 +122,6 @@ export function ExportPanel({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [link, setLink] = useState<ReturnType<typeof shareLink> | null>(null);
-  const [pdfAvailable, setPdfAvailable] = useState<boolean | null>(null);
-
-  /**
-   * Ask once whether the report service is up.
-   *
-   * The button is not shown until it answers. Offering an export that then
-   * fails is worse than not offering it: the user has already decided the tool
-   * can do the thing.
-   */
-  useEffect(() => {
-    let live = true;
-    void reportServiceAvailable().then((ok) => {
-      if (live) setPdfAvailable(ok);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
 
   /** Run an export, reporting whatever goes wrong rather than swallowing it. */
   const run = useCallback(
@@ -192,6 +175,30 @@ export function ExportPanel({
       };
     });
   }, [cases, margin, session.meta.name]);
+
+  /**
+   * Every case, prepared for the report.
+   *
+   * Serialising the charts here rather than inside the PDF module keeps the
+   * only code that touches a live SVG element in one place, and means the
+   * layout receives a payload it could equally have read from a file.
+   *
+   * The chart goes through `chartToReportSvg`, which takes no weather and
+   * draws no footer band — see the note there for why a record drawing is a
+   * narrower thing than a presentation one.
+   */
+  const reportCases = useCallback(() => {
+    return cases.map((entry) => {
+      const svg = entry.chartRef.current;
+      return {
+        label: entry.label,
+        solved: entry.solved,
+        // A case whose chart is not mounted still contributes its tables. This
+        // is the one export that must not refuse to produce anything.
+        chartSvg: svg ? chartToReportSvg({ svg, domain: entry.domain, margin }) : undefined,
+      };
+    });
+  }, [cases, margin]);
 
   const project = () => toProject(session);
 
@@ -391,44 +398,39 @@ export function ExportPanel({
         </>
       )}
 
-      {pdfAvailable && (
-        <>
-          <h3>Report</h3>
-          <div className="export-actions">
-            <button
-              type="button"
-              className="primary"
-              onClick={() =>
-                void run('Rendering the report', async () => {
-                  // The chart is rasterised rather than sent as vector: a PDF
-                  // that embeds an SVG needs a converter on the server, and the
-                  // one thing this service must not do is acquire a second
-                  // rendering path that can disagree with the first.
-                  const chartPng = await chartToBase64Png(chartOptions(), 2).catch(() => undefined);
-                  const blob = await requestReport(
-                    buildReportPayload({ solved, units, atmosphere, meta: session.meta, chartPng }),
-                  );
-                  downloadBlob(blob, projectFilename(session.meta, 'pdf', { qualifier: caseName }));
-                })
-              }
-            >
-              Branded PDF report
-            </button>
-          </div>
-        </>
-      )}
-      {pdfAvailable === false && (
-        <p className="comfort-note">
-          {/* Two different situations, and telling them apart is the whole
-              value of the message: one is a deployment that ships without the
-              service, the other is a service that is down. Only the second is
-              worth anyone investigating. */}
-          {API_BASE
-            ? 'PDF reports need the rendering service, which is not answering right now.'
-            : 'This build ships without the PDF report service.'}{' '}
-          Every other export here runs entirely in your browser.
-        </p>
-      )}
+      <h3>Report</h3>
+      <div className="export-actions">
+        <button
+          type="button"
+          className="primary"
+          onClick={() =>
+            void run('Rendering the report', async () => {
+              const blob = await reportToPdf(
+                buildReportPayload({
+                  cases: reportCases(),
+                  units,
+                  atmosphere,
+                  meta: session.meta,
+                }),
+              );
+              downloadBlob(
+                blob,
+                projectFilename(session.meta, 'pdf', { qualifier: REPORT_QUALIFIER }),
+              );
+            })
+          }
+        >
+          PDF report
+        </button>
+      </div>
+      <p className="comfort-note">
+        {cases.length > 1
+          ? `A page for each operating case — ${cases.map((entry) => entry.label).join(' and ')} — `
+          : 'One page — '}
+        each with the chart, its state points, and its loads. The weather overlay
+        is never included: a record of a design is the chart, the process lines,
+        and the table of points.
+      </p>
 
       {status.kind !== 'idle' && (
         <p className={status.kind === 'failed' ? 'comfort-limit' : 'comfort-note'}>{status.message}</p>

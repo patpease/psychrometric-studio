@@ -26,8 +26,13 @@
  * Not embedded. A psychrometric chart carries a few dozen numeric labels, and
  * subsetting and base64-ing a font file to carry them would add hundreds of
  * kilobytes to every export. The serialised file names a system stack instead,
- * so it renders with the reader's own UI font. Where exact typography matters —
- * a report — the PDF path rasterises at 2× and the API sets its own type.
+ * so it renders with the reader's own UI font.
+ *
+ * The PDF report is the one place that needs typography it can promise, and it
+ * gets it a different way: `chartToReportSvg` below hands the same vector
+ * drawing to `io/pdf.ts`, which maps the stack onto Helvetica — one of the
+ * fourteen faces every PDF reader is required to have, so nothing is embedded
+ * there either.
  */
 import type { ChartDomain, ChartMargin } from '../chart/scales.js';
 import { drawWeather, type WeatherMode } from '../chart/WeatherLayer.js';
@@ -302,6 +307,37 @@ export function chartToSvg(options: ChartExportOptions, weatherScale = 2): strin
 }
 
 /**
+ * The chart as it appears in the **report**, which is a narrower thing than the
+ * chart as it appears anywhere else.
+ *
+ * Two deliberate omissions, and the type enforces both by not accepting the
+ * options that would produce them.
+ *
+ * **No weather overlay.** A record of a design is the chart, the process lines,
+ * and the table of points. The weather cloud is a presentation device — it
+ * argues for a design in front of an audience — and on a document that goes
+ * into a submittal it is decoration over the lines somebody has to read. This
+ * is a rule rather than a default: `ReportChartOptions` has no `weather`
+ * field, so a future caller cannot pass one by mistake.
+ *
+ * **No footer band.** The chart's own stamp exists so that a chart pasted into
+ * a slide carries its provenance with it. Inside the report the page footer
+ * already carries the same version, basis, pressure and disclaimer on every
+ * page, and printing both puts the same sentence on the page twice.
+ */
+export type ReportChartOptions = Omit<ChartExportOptions, 'weather' | 'caption' | 'generated'>;
+
+export function chartToReportSvg(options: ReportChartOptions): string {
+  const serialised = inLightHost((host) => {
+    // `weather` is absent from the options type, so `prepareChart` composites
+    // nothing; the scale argument is therefore unused and passed as 1.
+    const { clone } = prepareChart(options, host, 1, false);
+    return new XMLSerializer().serializeToString(clone);
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${serialised}`;
+}
+
+/**
  * The provenance stamp, drawn into the chart itself.
  *
  * On the chart rather than beside it, because the two get separated: a chart
@@ -506,16 +542,4 @@ function loadImage(url: string): Promise<HTMLImageElement> {
       );
     image.src = url;
   });
-}
-
-/** A PNG as a bare base64 payload, for handing to the report API. */
-export async function chartToBase64Png(options: ChartExportOptions, scale = 2): Promise<string> {
-  const blob = await chartToPng(options, scale);
-  const buffer = new Uint8Array(await blob.arrayBuffer());
-  let binary = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < buffer.length; i += CHUNK) {
-    binary += String.fromCharCode(...buffer.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
 }

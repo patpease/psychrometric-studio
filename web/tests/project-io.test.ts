@@ -28,7 +28,6 @@ import { validateProject } from '../src/io/validate.js';
 import { SCHEMA_VERSION, systemLabel } from '../src/types/project.js';
 import { decodeProject, encodeProject, readFragment, shareLink, MAX_URL_LENGTH } from '../src/io/url.js';
 import { toCsv, toCombinedCsv } from '../src/io/csv.js';
-import { buildReportPayload } from '../src/io/report.js';
 import { solveSystem } from '../src/processes/chain.js';
 import { standardAtmosphere } from '../src/psych/atmosphere.js';
 import { defaultDomain } from '../src/chart/scales.js';
@@ -464,47 +463,6 @@ describe('CSV', () => {
 });
 
 /* -------------------------------------------------------------------------- */
-
-describe('report payload', () => {
-  const payload = buildReportPayload({
-    solved: solve(),
-    units: 'IP',
-    atmosphere: standardAtmosphere('IP'),
-    meta: { name: 'Test AHU' },
-  });
-
-  it('sends values already solved, in display units', () => {
-    const first = payload.statePoints[0] as Record<string, number>;
-    expect(first['tdb']).toBeCloseTo(95, 1);
-    // Humidity ratio in gr/lb, not lb/lb: the API is handed numbers to
-    // typeset, and it does not know one unit system from another.
-    expect(first['w']).toBeGreaterThan(50);
-  });
-
-  it('sends an undefined SHR as null, not NaN', () => {
-    for (const load of payload.loads as Record<string, unknown>[]) {
-      expect(Number.isNaN(load['shr'])).toBe(false);
-    }
-  });
-
-  it('omits the source stage from the loads, which move no energy', () => {
-    expect((payload.loads as { point: number }[]).some((load) => load.point === 1)).toBe(false);
-  });
-
-  it('states whether the energy balance closed', () => {
-    expect(payload.totals['balance']).toMatch(/closes/);
-  });
-
-  it('carries a stage that did not solve rather than dropping it', () => {
-    const broken = buildReportPayload({
-      solved: solve([{ id: 'cc', type: 'cooling', name: 'Unset coil', params: {} }]),
-      units: 'IP',
-      atmosphere: standardAtmosphere('IP'),
-      meta: {},
-    });
-    expect((broken.statePoints[0] as { error?: string }).error).toBeTruthy();
-  });
-});
 
 describe('filenames', () => {
   it('is built from the project name and sorts by date', () => {

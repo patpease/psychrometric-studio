@@ -8,7 +8,7 @@
  * distribution most people will ever see.
  */
 import { APP_VERSION, BRAND, DISCLAIMER } from '../config/branding.js';
-import { CALCULATION_BASIS } from '../psych/psychrolib.js';
+import { CALCULATION_BASIS, PSYCHROLIB_CITATION } from '../psych/psychrolib.js';
 import { TMYX_CITATION } from './WeatherPanel.js';
 
 /**
@@ -40,6 +40,27 @@ const BUNDLED = [
     licence: 'MIT',
     role: 'Opens zipped weather archives, and compresses projects into share links.',
     href: 'https://github.com/101arrowz/fflate',
+  },
+  {
+    name: 'jsPDF',
+    version: '4.2.1',
+    licence: 'MIT',
+    role: 'Draws the PDF report, in your browser. Loaded only when you ask for one.',
+    href: 'https://github.com/parallax/jsPDF',
+  },
+  {
+    name: 'svg2pdf.js',
+    version: '2.8.1',
+    licence: 'MIT',
+    role: 'Carries the chart into that report as vector, not as a picture of one.',
+    href: 'https://github.com/yWorks/svg2pdf.js',
+  },
+  {
+    name: 'jspdf-autotable',
+    version: '5.0.8',
+    licence: 'MIT',
+    role: 'Sets the state-point and load schedules in the report.',
+    href: 'https://github.com/simonbengtsson/jsPDF-AutoTable',
   },
   {
     name: 'React',
@@ -77,6 +98,16 @@ export function AboutPanel(): React.JSX.Element {
         The vendored copy of the library is checked against a recorded SHA-256 in
         CI, so the basis stamped on an export cannot drift from the code that
         produced it.
+      </p>
+      {/*
+        PsychroLib asks to be cited two ways — the summary paper, and the
+        release in use. Both are carried, in the same form as the weather
+        citation further down, so a reader can lift either straight into a
+        reference list.
+      */}
+      <p className="citation">
+        <span className="citation-entry">{PSYCHROLIB_CITATION.paper}</span>
+        <span className="citation-entry">{PSYCHROLIB_CITATION.software}</span>
       </p>
 
       <h4>What it does not do</h4>

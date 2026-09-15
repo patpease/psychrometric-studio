@@ -5,12 +5,11 @@ file — `PLAN.md` is the historical record and should not grow further.
 
 ## Open from the two-case work
 
-- **The combined report in PDF.** Shipped for chart and schedule: a *Both cases*
-  export writes the charts side by side and a CSV whose last section sets the
-  totals against each other. What is not done is teaching the report service the
-  same trick, because it is not deployed — building a two-case PDF today would
-  be building something nobody can see. `buildReportPayload` still describes one
-  case, and that is where it would start.
+- **~~The combined report in PDF.~~** Done, and not the way this entry expected.
+  Rather than teaching the undeployed service to handle two cases, the whole
+  report moved into the browser: jsPDF with svg2pdf.js, one page per case, the
+  chart as vector. The service it replaced had been code-complete and undeployed
+  since v1.0, which was the argument. What is left of it is below.
 - **More than two cases.** The format takes any number and the app carries them
   correctly — the migration, the validator, the file writer, and the solver are
   all written for a list. Two things assume a pair: the page turn is a two-sided
@@ -41,9 +40,11 @@ Each of these was a deliberate deferral, not an oversight.
   than a constant in `App`.
 - **Oblique chart projection.** The schema has `projection: 'rectangular' |
   'oblique'` and only the first is implemented. Real ASHRAE charts are oblique.
-- **The PDF report service is not deployed.** Code complete and tested; three
-  settings to stand up, in `docs/deploying.md`. The easy one to miss is widening
-  `connect-src` in `web/public/_headers`.
+- **~~The PDF report service.~~** Removed with the directory it lived in. Two of
+  the three endpoints its package docstring promised were never built, and the
+  one that was is now done in the browser. If a server is ever wanted again, the
+  thing to bring back is not the renderer — it is `io/report.ts`'s payload,
+  which is already the shape a service would need.
 - **No `og:url` or canonical tag** until a custom domain is settled.
 
 ## v1.1 — review and adjust
@@ -102,9 +103,15 @@ vocabulary that already exists.
 
 Not backlog items — things any change has to keep true.
 
-- The tool works with no network after first load. No fonts, no analytics, no
-  third-party requests. This is what makes the CSP tight enough to be worth
-  having and "nothing is uploaded" true rather than aspirational.
+- No third-party requests, ever. No fonts, no analytics, no telemetry, and
+  nothing about a project leaves the machine. This is what makes the CSP tight
+  enough to be worth having and "nothing is uploaded" true rather than
+  aspirational.
+- The tool works with no network after first load, with exactly one exception:
+  the PDF report fetches its three libraries — about 155 kB gzipped — on the
+  first click rather than burdening every visit with them. They are same-origin
+  chunks of the same deploy. Adding a second exception needs a better reason
+  than this one had.
 - Every export carries the app version, calculation basis, site pressure, and
   unit system.
 - The disclaimer appears on every output. The tool models idealised processes

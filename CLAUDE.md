@@ -22,10 +22,9 @@ web/src/processes/   17 process models, chain solver, duty accounting
 web/src/comfort/     ASHRAE 55 PMV/PPD, comfort polygon, adaptive model
 web/src/weather/     EPW parsing, density binning, hours-in-zone
 web/src/education/   equipment + concept content, live design checks, walkthrough
-web/src/io/          project files, share links, CSV, SVG/PNG, report client
+web/src/io/          project files, share links, CSV, SVG/PNG, the PDF report
 web/src/icons/       60 equipment SVGs + build-time generator
 web/worker/          the Worker entry point and the weather relay route
-api/                 FastAPI PDF report service. Optional; not deployed.
 shared/schema/       project.schema.json — authoritative project file format
 ```
 
@@ -118,6 +117,15 @@ the failure shapes this codebase produces.
 - **`?? []` in a prop.** It builds a new array every render, so a memoised child
   comparing props shallowly re-renders every time regardless. Share one frozen
   empty value.
+- **An export that quietly re-derives a number.** The report is drawn from
+  `io/report.ts`, which formats every figure with the same functions the screen
+  uses, and `io/pdf.ts` only positions strings. A layout that took raw numbers
+  and picked its own precision would disagree with the chart beside it by a
+  decimal place, and the document nobody re-checks is the one that ships.
+- **Putting the weather overlay on a record drawing.** `chartToReportSvg` takes
+  no `weather` option and draws no footer band, and both omissions are enforced
+  by its type rather than by call sites remembering. `tests/report.test.ts` fails
+  the *type check*, not the runner, if either is widened.
 - **Two parameters that name the same property.** A source stage stores dry
   bulb plus *one* moisture property. Relative humidity, wet bulb and dew point
   are three names for the same thing, and `parseStateInput` takes the first it

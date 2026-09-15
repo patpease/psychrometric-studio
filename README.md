@@ -97,8 +97,17 @@ first contact.
 ### Getting work out
 
 Project files (JSON), share links that carry the whole project in the URL, CSV
-of state points and duties, and **PNG** and **SVG** of the chart. An optional
-PDF report is available when the report service is deployed.
+of state points and duties, **PNG** and **SVG** of the chart, and a **PDF
+report** — a page per operating case, each with the chart as vector, its state
+points, its loads and its totals, under a footer that names the release, the
+calculation basis, the site pressure and the unit system.
+
+The report is a record of a design rather than a picture of one, so it never
+carries the weather overlay: the overlay argues for a design in front of an
+audience, and on a document that goes into a submittal it is decoration over the
+lines somebody has to read.
+
+Everything on that list is produced in the browser. Nothing is uploaded.
 
 ---
 
@@ -108,7 +117,7 @@ PDF report is available when the report service is deployed.
 
 | | |
 |---|---|
-| Moist-air properties | [PsychroLib](https://github.com/psychrometrics/psychrolib) 2.5.0, following the ASHRAE Handbook — Fundamentals |
+| Moist-air properties | [PsychroLib](https://github.com/psychrometrics/psychrolib) 2.5.0, following the ASHRAE Handbook — Fundamentals. Cite as [Meyer & Thevenard 2019](https://doi.org/10.21105/joss.01137) and [the 2.5.0 release](https://doi.org/10.5281/zenodo.3748874) |
 | Thermal comfort | [jsthermalcomfort](https://github.com/FedericoTartarini/jsthermalcomfort) 1.4.0, the JavaScript port of `pythermalcomfort` |
 | Weather archives | [fflate](https://github.com/101arrowz/fflate) 0.8.3 |
 | Interface | [React](https://react.dev) 19 |
@@ -140,11 +149,16 @@ server-side route is `/api/weather`, which relays weather archives from
 Climate.OneBuilding because that host sends no CORS header; it validates the
 host against a single-entry allowlist before fetching anything.
 
-An optional FastAPI service renders PDF reports. It **lays out; it never
-calculates** — every number in a report is computed in the browser and sent
-already solved, because a service that re-derived duties from state points would
-drift from the chart on screen, and the report would be the thing that was
-wrong.
+The PDF report is drawn client-side by jsPDF, with svg2pdf.js carrying the
+chart across as vector rather than as a picture of one. The split inside it is
+the same discipline a rendering service would have needed: `io/report.ts`
+computes and formats every number, `io/pdf.ts` only positions it. A layout that
+re-derived duties from state points would drift from the chart on screen, and
+the report would be the thing that was wrong.
+
+Those three libraries are about 155 kB gzipped, so they load on the first click
+rather than on every visit. That is the one feature that needs the network after
+first load; everything else keeps working offline.
 
 The project file format is defined by
 [a JSON Schema](shared/schema/project.schema.json), which is authoritative, and
@@ -153,7 +167,7 @@ It stores what the user **declared**, never what the solver worked out — so
 reopening a project at a different site pressure re-solves rather than carrying
 yesterday's answers forward under today's assumptions.
 
-**536 tests** cover the engine, including a reference gate against published
+**593 tests** cover the engine, including a reference gate against published
 ASHRAE values.
 
 ---
@@ -169,14 +183,12 @@ web/       Vite + TypeScript front end — owns every interactive calculation
   src/weather/   EPW and DDY parsing, density binning, hours-in-zone
   src/education/ equipment and concept content, live design checks, walkthrough
   src/icons/     equipment SVGs and the build-time generator
-  src/io/        project files, share links, CSV, SVG/PNG export, report client
+  src/io/        project files, share links, CSV, SVG/PNG export, PDF report
   src/config/    branding and legal text (single source of truth)
   src/types/     project file types, mirroring the JSON Schema
   worker/        the Cloudflare Worker entry point and weather relay
   vendor/        vendored PsychroLib + provenance
   tests/         engine validation, including the ASHRAE reference gate
-api/       FastAPI — PDF reports and the CI comfort oracle. Deliberately thin.
-             It lays out; it never calculates.
 shared/schema/   project.schema.json — authoritative project file format
 docs/            calculation reference and architecture decisions
 scripts/         vendoring and verification
@@ -232,22 +244,9 @@ Run `npm run preview:worker` before deploying. A green build is not evidence
 that the deployed shape works — twice it has not been, and that command is what
 closes the gap.
 
-Leave `VITE_API_URL` unset and the tool ships without the PDF report, which is
-the default configuration. Full instructions, the content security policy, and
-what changes when you add the report service are in
+There is nothing to configure for the report — it runs in the browser like
+every other export. Full instructions and the content security policy are in
 [docs/deploying.md](docs/deploying.md).
-
-### Running the report service
-
-```bash
-cd api && python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m uvicorn app.main:app --port 8000
-```
-
-The web application works without it. The PDF button appears only once
-`/health` answers, so the export is never a promise the tool cannot keep. Two
-environment variables matter in deployment: `VITE_API_URL` at build time for the
-front end, and `PSYCHRO_ALLOWED_ORIGINS` on the service, which must name the
-deployed front end or the browser will refuse the request.
 
 ## Design notes worth reading before contributing
 
@@ -277,8 +276,8 @@ Six rules that the tests enforce and that are easy to break by accident:
 4. **Enthalpy is not comparable across unit systems.** The IP and SI datums
    differ (0 °F vs 0 °C). Only enthalpy *differences* convert. See
    [calculation-reference §5](docs/calculation-reference.md).
-5. **The API lays out; it does not calculate.** Every number in a report is
-   computed in the browser and sent already solved.
+5. **The report lays out; it does not calculate.** Every number in a report is
+   computed and formatted in `io/report.ts`; `io/pdf.ts` only positions it.
 6. **A design check must stay silent on a good design.** Rules in
    `src/education/checks.ts` are tested against the systems the tool opens with,
    in *both* unit systems. A rule that fires there has taught the user to ignore

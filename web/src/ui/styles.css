@@ -1311,6 +1311,16 @@ body {
   color: var(--ink-muted);
 }
 
+/* Two references in one block. Separated, or the second reads as the tail of
+   the first — which is exactly what a reference list must not do. */
+.citation-entry {
+  display: block;
+}
+
+.citation-entry + .citation-entry {
+  margin-top: 0.4rem;
+}
+
 .citation a,
 .comfort-note a {
   color: var(--accent);
