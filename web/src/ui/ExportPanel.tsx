@@ -55,6 +55,15 @@ export interface ExportPanelProps {
    * Both charts are mounted whether or not the page has been turned, so a
    * drawing of both needs no re-render — only a reference to each.
    */
+  /**
+   * Runs before an export and returns what to run after it.
+   *
+   * On a phone the live chart is the phone layout, and an export must not be:
+   * the App mounts desktop-sized copies of the charts off screen here and
+   * points `chartRef` and each case's ref at them, then takes them down again.
+   * A desk passes nothing and exports the live chart, exactly as before.
+   */
+  beforeExport?: (() => Promise<() => void>) | undefined;
   cases: readonly {
     label: string;
     chartRef: React.RefObject<SVGSVGElement | null>;
@@ -100,6 +109,7 @@ export function ExportPanel({
   margin,
   chartRef,
   weather,
+  beforeExport,
   cases,
   onMetaChange,
   onOpen,
@@ -127,7 +137,9 @@ export function ExportPanel({
   const run = useCallback(
     async (message: string, action: () => void | Promise<void>): Promise<void> => {
       setStatus({ kind: 'busy', message });
+      let after: (() => void) | null = null;
       try {
+        if (beforeExport) after = await beforeExport();
         await action();
         setStatus({ kind: 'done', message: `${message} — done.` });
       } catch (error) {
@@ -135,9 +147,11 @@ export function ExportPanel({
           kind: 'failed',
           message: error instanceof Error ? error.message : `${message} failed.`,
         });
+      } finally {
+        after?.();
       }
     },
-    [],
+    [beforeExport],
   );
 
   const chartOptions = useCallback(() => {

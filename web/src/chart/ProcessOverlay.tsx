@@ -29,6 +29,12 @@ export interface ProcessOverlayProps {
   selected: number | null;
   onSelect: (index: number | null) => void;
   /**
+   * A finger rather than a mouse. The marker is 14 px across, and a fingertip
+   * is about 40: each point gets an invisible target a finger can hit, so a
+   * drag that means to move a point does not start a pan beside it.
+   */
+  coarse?: boolean | undefined;
+  /**
    * Move a draggable state point to a new condition.
    *
    * **Only entering-air points are draggable, and that is a statement about
@@ -83,6 +89,7 @@ export function ProcessOverlay({
   arrowId,
   selected,
   onSelect,
+  coarse = false,
   onDragState,
   toData,
 }: ProcessOverlayProps): React.JSX.Element {
@@ -225,6 +232,7 @@ export function ProcessOverlay({
               }
             }}
           >
+            {coarse && <circle cx={x} cy={y} r={22} className="process-point-target" />}
             <circle cx={x} cy={y} r={isSelected ? 9 : 7} />
             <text x={x} y={y} dy="0.32em" textAnchor="middle">
               {position + 1}

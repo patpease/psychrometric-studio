@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart } from '../chart/render.js';
 import { useChartInteraction } from '../chart/interact.js';
 import {
+  createScales,
   defaultDomain,
   domainLimits,
   type ChartDomain,
@@ -63,21 +64,15 @@ import {
 import { ResultsPanel } from './ResultsPanel.js';
 import { solveSystem } from '../processes/chain.js';
 import type { Stage } from '../types/project.js';
-import {
-  formatTemperature,
-  formatHumidityRatio,
-  formatEnthalpy,
-  formatSpecificVolume,
-  formatDensity,
-  formatRelativeHumidity,
-  formatPressure,
-  formatVapourPressure,
-} from './format.js';
+import { formatPressure } from './format.js';
 
 import type { PressureMode } from '../io/project.js';
 import type { EpwFile, WeatherHour } from '../weather/epw.js';
 import { STARTER_COOLING, STARTER_HEATING } from './starters.js';
 import { SystemFlip } from './SystemFlip.js';
+import { TabBar, type MobileTab } from './TabBar.js';
+import { ConditionReadout } from './ConditionReadout.js';
+import { COARSE_POINTER, COMPACT_LAYOUT, useMediaQuery } from './useMediaQuery.js';
 import type { DesignDay, DesignDayKind } from '../weather/ddy.js';
 
 /** Selection and highlighting, per system. Session-only; never saved. */
@@ -110,6 +105,18 @@ function starterSystems(units: UnitSystem): SessionSystem[] {
   const heating = blankSystem('heating', units, [...STARTER_HEATING]);
   return [cooling, heating];
 }
+
+/**
+ * The size of a chart exported from a phone.
+ *
+ * A phone's live chart is its own layout — larger type, fewer labels, the
+ * phone's own proportions — and an export must never be that: a drawing sent
+ * to someone outlives the screen it was made on. So a phone exports a copy
+ * drawn at this size, about what a laptop's chart pane gives, with the desk's
+ * type and labelling. A desk still exports its live chart at whatever size the
+ * window gives it.
+ */
+const EXPORT_SIZE = { width: 960, height: 680 } as const;
 
 /** Track the element's size so the chart fills the space it is given. */
 function useElementSize(): [React.RefObject<HTMLDivElement | null>, { width: number; height: number }] {
@@ -308,6 +315,18 @@ export function App(): React.JSX.Element {
    */
   const [topicOverride, setTopicOverride] = useState<string | null>(null);
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
+
+  /**
+   * The tab layout, below 860px: one screen at a time and a tab bar.
+   *
+   * Opens on the chart, because on a phone the question is nearly always "what
+   * does this come to", asked of a system someone has already set up.
+   */
+  const compact = useMediaQuery(COMPACT_LAYOUT);
+  const coarse = useMediaQuery(COARSE_POINTER);
+  const [tab, setTab] = useState<MobileTab>('chart');
+  /** The docked walkthrough card, open or folded down to its step line. */
+  const [dockOpen, setDockOpen] = useState(true);
   /**
    * The chain the walkthrough covered over, kept so it can be put back.
    *
@@ -335,6 +354,38 @@ export function App(): React.JSX.Element {
     return faceRefs.current[index]!;
   };
   const chartRef = faceRef(activeSystem);
+
+  /*
+   * The desk-layout copies a phone exports from — see EXPORT_SIZE. Mounted only
+   * for the length of an export: `beforeExport` mounts them and resolves once
+   * they have committed, and the function it resolves to takes them down.
+   */
+  const [exportCopies, setExportCopies] = useState(false);
+  const copiesCommitted = useRef<(() => void) | null>(null);
+  const exportRefs = useRef<React.RefObject<SVGSVGElement | null>[]>([]);
+  const exportRef = (index: number): React.RefObject<SVGSVGElement | null> => {
+    exportRefs.current[index] ??= { current: null };
+    return exportRefs.current[index]!;
+  };
+  useEffect(() => {
+    if (!exportCopies) return;
+    copiesCommitted.current?.();
+    copiesCommitted.current = null;
+  }, [exportCopies]);
+  const beforeExport = useCallback(
+    (): Promise<() => void> =>
+      new Promise((resolve) => {
+        const done = (): void => resolve(() => setExportCopies(false));
+        // Already mounted for an export still running: nothing to wait for.
+        if (exportRefs.current.some((ref) => ref.current)) {
+          resolve(() => undefined);
+          return;
+        }
+        copiesCommitted.current = done;
+        setExportCopies(true);
+      }),
+    [],
+  );
 
   /**
    * Light or dark, and who chose it.
@@ -568,7 +619,17 @@ export function App(): React.JSX.Element {
     setActiveSystem(walkthroughSystem);
     setTopicOverride(null);
     setWalkthroughStep(0);
+    // In the tab layout the walkthrough is read on the chart, as a card over
+    // it, because every step is about something the chart is showing.
+    setTab('chart');
+    setDockOpen(true);
   }, [systems, walkthroughSystem]);
+
+  /** A step change brings the chart back, from whichever tab it was made on. */
+  const goToStep = useCallback((step: number): void => {
+    setWalkthroughStep(step);
+    setTab('chart');
+  }, []);
 
   const exitWalkthrough = useCallback((): void => {
     setWalkthroughStep(null);
@@ -781,6 +842,8 @@ export function App(): React.JSX.Element {
           selectedStage={ui.selectedStage}
           onSelectStage={live ? selectStage : undefined}
           onDragState={live ? dragSource : undefined}
+          compact={live && compact}
+          coarse={coarse}
           comfortZones={zones}
           designDays={weatherFile?.design?.days ?? NO_DESIGN_DAYS}
           selectedDesignDay={ui.selectedDesignDay}
@@ -851,9 +914,15 @@ export function App(): React.JSX.Element {
         </div>
       </header>
 
-      <main className="app-body">
+      <main className="app-body" data-tab={compact ? tab : undefined}>
         <aside className="panel panel-left">
-          {walkthroughStep !== null ? (
+          {walkthroughStep !== null && compact ? (
+            // The card itself is on the chart; this is the way back to it.
+            <button type="button" className="wt-running" onClick={() => setTab('chart')}>
+              Walkthrough · step {walkthroughStep + 1} of {WALKTHROUGH.steps.length} — continue on the
+              chart ›
+            </button>
+          ) : walkthroughStep !== null ? (
             <WalkthroughPanel
               step={walkthroughStep}
               onStep={setWalkthroughStep}
@@ -908,6 +977,7 @@ export function App(): React.JSX.Element {
           onPointerMove={interaction.onPointerMove}
           onPointerDown={interaction.onPointerDown}
           onPointerUp={interaction.onPointerUp}
+          onPointerCancel={interaction.onPointerCancel}
           onPointerLeave={interaction.onPointerLeave}
         >
           {/* Outside the turning sheet: a control that flipped with the page
@@ -922,7 +992,76 @@ export function App(): React.JSX.Element {
             {faces.map((index) => renderFace(index))}
           </div>
 
-          <p className="chart-hint">Scroll to zoom · drag to pan</p>
+          <p className="chart-hint">
+            <span className="chart-hint-mouse">Scroll to zoom · drag to pan</span>
+            <span className="chart-hint-touch">Pinch to zoom · drag to pan · tap to read</span>
+          </p>
+
+          {/*
+            The tab layout's furniture on the chart. Each stops its own pointer
+            events, or a tap on a button in it would also land on the chart
+            underneath and start a pan or pin a reading.
+          */}
+          {compact && walkthroughStep === null && selectedSolved && selectedStage !== null && (
+            <div className="stage-chip" onPointerDown={(event) => event.stopPropagation()}>
+              <span>
+                {selectedStage + 1} · {selectedSolved.displayName}
+              </span>
+              <button type="button" onClick={() => setTab('system')}>
+                Edit ›
+              </button>
+            </div>
+          )}
+
+          {compact && walkthroughStep === null && hover && (
+            <div
+              // Over the half of the chart the tap did not land in, so the
+              // card never covers the point it is describing.
+              className={
+                createScales(domain, size.width, size.height).project(hover.tdb, hover.w).y >
+                size.height / 2
+                  ? 'chart-readout at-top'
+                  : 'chart-readout'
+              }
+              role="region"
+              aria-label="Condition at the point tapped"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div className="chart-readout-head">
+                <span>Condition here</span>
+                <button type="button" onClick={interaction.clearHover} aria-label="Close the reading">
+                  ✕
+                </button>
+              </div>
+              <ConditionReadout state={hover} units={units} />
+            </div>
+          )}
+
+          {compact && walkthroughStep !== null && (
+            <div
+              className={`wt-dock${dockOpen ? '' : ' collapsed'}`}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="wt-dock-toggle"
+                onClick={() => setDockOpen((open) => !open)}
+                aria-expanded={dockOpen}
+              >
+                {/* Open, the card's own header names the step; folded, this
+                    line is all there is of it. */}
+                <span>
+                  {dockOpen
+                    ? ''
+                    : `Step ${walkthroughStep + 1} of ${WALKTHROUGH.steps.length} · ${WALKTHROUGH.steps[walkthroughStep]?.title ?? ''}`}
+                </span>
+                <span>{dockOpen ? 'Hide ▾' : 'Show ▴'}</span>
+              </button>
+              {dockOpen && (
+                <WalkthroughPanel step={walkthroughStep} onStep={goToStep} onExit={exitWalkthrough} />
+              )}
+            </div>
+          )}
         </div>
 
         <aside className="panel panel-right">
@@ -944,10 +1083,11 @@ export function App(): React.JSX.Element {
               units={units}
               atmosphere={atmosphere}
               domain={domain}
-              chartRef={chartRef}
+              chartRef={compact ? exportRef(activeSystem) : chartRef}
+              beforeExport={compact ? beforeExport : undefined}
               cases={systems.map((system, index) => ({
                 label: systemLabel(system, index),
-                chartRef: faceRef(index),
+                chartRef: compact ? exportRef(index) : faceRef(index),
                 domain: system.domain,
                 weather: {
                   hours: weatherFile?.hours ?? NO_HOURS,
@@ -1011,7 +1151,7 @@ export function App(): React.JSX.Element {
             />
           </Collapsible>
 
-          <Collapsible title="Results" defaultOpen>
+          <Collapsible title="Results" defaultOpen className="section-results">
             <ResultsPanel
               solved={supply}
               units={units}
@@ -1020,29 +1160,10 @@ export function App(): React.JSX.Element {
             />
           </Collapsible>
 
-          <Collapsible title="Condition at cursor" defaultOpen>
+          <Collapsible title="Condition at cursor" defaultOpen className="section-cursor">
             <section>
             {hover ? (
-              <dl className="readout">
-                <dt>Dry bulb</dt>
-                <dd>{formatTemperature(hover.tdb, units, true)}</dd>
-                <dt>Wet bulb</dt>
-                <dd>{formatTemperature(hover.twb, units, true)}</dd>
-                <dt>Dew point</dt>
-                <dd>{formatTemperature(hover.tdp, units, true)}</dd>
-                <dt>Relative humidity</dt>
-                <dd>{formatRelativeHumidity(hover.rh, true)}</dd>
-                <dt>Humidity ratio</dt>
-                <dd>{formatHumidityRatio(hover.w, units, true)}</dd>
-                <dt>Enthalpy</dt>
-                <dd>{formatEnthalpy(hover.h, units, true)}</dd>
-                <dt>Specific volume</dt>
-                <dd>{formatSpecificVolume(hover.v, units, true)}</dd>
-                <dt>Density</dt>
-                <dd>{formatDensity(hover.density, units, true)}</dd>
-                <dt>Vapour pressure</dt>
-                <dd>{formatVapourPressure(hover.vapourPressure, units, true)}</dd>
-              </dl>
+              <ConditionReadout state={hover} units={units} />
             ) : (
               <p className="muted">
                 Move the pointer over the chart. Readings stop at the saturation curve — there is
@@ -1161,14 +1282,48 @@ export function App(): React.JSX.Element {
           </Collapsible>
 
           <FeedbackPanel units={units} />
+
+          {/* In the tab layout the footer belongs to More: the page no longer
+              scrolls, so a footer after .app would sit under the tab bar. */}
+          {compact && <SiteFooter />}
         </aside>
       </main>
+
+      {compact && <TabBar tab={tab} onTab={setTab} />}
+
+      {/* The desk-layout copies a phone exports from. See EXPORT_SIZE. */}
+      {compact && exportCopies && (
+        <div className="export-copies" aria-hidden="true" inert>
+          {systems.map((system, index) => {
+            const ui = systemUi[system.id] ?? EMPTY_UI;
+            return (
+              <Chart
+                key={system.id}
+                domain={system.domain}
+                pressure={atmosphere.pressure}
+                units={units}
+                width={EXPORT_SIZE.width}
+                height={EXPORT_SIZE.height}
+                visibility={system.visibility}
+                showProtractor={system.showProtractor}
+                hover={null}
+                solved={solvedSystems[index]?.airstreams[0]}
+                selectedStage={ui.selectedStage}
+                comfortZones={zones}
+                designDays={weatherFile?.design?.days ?? NO_DESIGN_DAYS}
+                selectedDesignDay={ui.selectedDesignDay}
+                exportRef={exportRef(index)}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
     {/* Outside .app deliberately. That element is height-locked to the viewport
         and the chart pane sizes itself against it through a ResizeObserver, so
         the footer sits after it as a sibling and the page scrolls by exactly
         the footer's height. Nothing about the chart's bounds changes. */}
-    <SiteFooter />
+    {!compact && <SiteFooter />}
     </EducationContext.Provider>
   );
 }

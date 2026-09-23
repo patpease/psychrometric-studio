@@ -14,6 +14,8 @@ export interface CollapsibleProps {
   defaultOpen?: boolean;
   /** A short status shown beside the title, visible while collapsed. */
   badge?: string | undefined;
+  /** Names the section for the tab layout, which shows some and hides others. */
+  className?: string | undefined;
   children: ReactNode;
 }
 
@@ -21,10 +23,11 @@ export function Collapsible({
   title,
   defaultOpen = true,
   badge,
+  className,
   children,
 }: CollapsibleProps): React.JSX.Element {
   return (
-    <details className="collapsible" open={defaultOpen}>
+    <details className={className ? `collapsible ${className}` : 'collapsible'} open={defaultOpen}>
       <summary>
         <span className="collapsible-title">{title}</span>
         {badge && <span className="collapsible-badge">{badge}</span>}

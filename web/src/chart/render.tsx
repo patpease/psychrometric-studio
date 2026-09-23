@@ -71,7 +71,22 @@ export interface ChartProps {
    * front had just set.
    */
   exportRef?: React.RefObject<SVGSVGElement | null> | undefined;
+  /**
+   * The phone layout: larger type (styles.css, scoped to `.compact`), fewer
+   * dry-bulb ticks, and a line's label dropped when it would land within
+   * `LABEL_GAP_COMPACT` px of one its family already drew. Every line is
+   * still drawn. Only the live chart in the tab layout sets it; the export's
+   * desktop copy never does.
+   */
+  compact?: boolean | undefined;
+  /** A finger: state points get a target a finger can hit. */
+  coarse?: boolean | undefined;
 }
+
+/** How close two labels of one family may sit in the phone layout, in px. */
+const LABEL_GAP_COMPACT = 28;
+/** The width a dry-bulb label needs on a phone, "100.0" at 11px plus air. */
+const X_TICK_SPACING_COMPACT = 56;
 
 /** Build an SVG path from points in psychrometric space. */
 function pathFrom(points: readonly DataPoint[], scales: ChartScales): string {
@@ -118,12 +133,17 @@ function LineFamily({
   lines,
   family,
   scales,
+  labelGap = 0,
 }: {
   lines: ChartLine[];
   family: FamilyKey;
   scales: ChartScales;
+  /** See `labelGap` on the chart. */
+  labelGap?: number;
 }): React.JSX.Element {
   const style = FAMILY_STYLES[family];
+  // Anchors of the labels this family has already drawn, for the gap test.
+  const kept: { x: number; y: number }[] = [];
 
   return (
     <g className={`family family-${family}`}>
@@ -139,6 +159,14 @@ function LineFamily({
         // Keep text upright: flip any label that would read upside-down.
         const upright = angle > 90 || angle < -90 ? angle + 180 : angle;
 
+        // Every line is drawn; only its label can be dropped, and only for
+        // crowding its own family.
+        let labelled = Boolean(line.label);
+        if (labelled && labelGap > 0) {
+          labelled = kept.every((other) => Math.hypot(other.x - anchor.x, other.y - anchor.y) >= labelGap);
+          if (labelled) kept.push(anchor);
+        }
+
         return (
           <g key={`${line.value}-${index}`}>
             <path
@@ -149,7 +177,7 @@ function LineFamily({
               strokeDasharray={style.dash}
               strokeLinecap="round"
             />
-            {line.label && (
+            {labelled && (
               <text
                 className="line-label"
                 x={anchor.x}
@@ -244,6 +272,8 @@ function ChartView({
   selectedDesignDay = null,
   onSelectDesignDay,
   exportRef,
+  compact = false,
+  coarse = false,
 }: ChartProps): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement | null>(null);
   /**
@@ -295,7 +325,13 @@ function ChartView({
     return result;
   }, [domain, pressure, units]);
 
-  const xTicks = useMemo(() => niceTicks(domain.tdbMin, domain.tdbMax, 12), [domain]);
+  // Twelve on a desk. On a phone as many as fit: twelve across 330 px put
+  // "90.0100.0110.0" under the axis as one word.
+  const xTickCount = compact ? Math.max(4, Math.floor(scales.plotWidth / X_TICK_SPACING_COMPACT)) : 12;
+  const xTicks = useMemo(
+    () => niceTicks(domain.tdbMin, domain.tdbMax, xTickCount),
+    [domain, xTickCount],
+  );
   const yTicks = useMemo(() => {
     // Ticks are chosen in display units so the labels are round numbers, then
     // converted back — picking them in lb/lb would give values like 0.0071.
@@ -331,7 +367,7 @@ function ChartView({
         svgRef.current = node;
         if (exportRef) exportRef.current = node;
       }}
-      className="psych-chart"
+      className={compact ? 'psych-chart compact' : 'psych-chart'}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -375,7 +411,13 @@ function ChartView({
         </g>
 
         {DRAW_ORDER.filter((family) => visibility[family]).map((family) => (
-          <LineFamily key={family} family={family} lines={families[family]} scales={scales} />
+          <LineFamily
+            key={family}
+            family={family}
+            lines={families[family]}
+            scales={scales}
+            labelGap={compact ? LABEL_GAP_COMPACT : 0}
+          />
         ))}
 
         {/*
@@ -403,6 +445,7 @@ function ChartView({
             onSelect={onSelectStage ?? (() => undefined)}
             onDragState={onDragState}
             toData={toData}
+            coarse={coarse}
           />
         )}
 

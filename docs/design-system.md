@@ -123,6 +123,85 @@ section headers with `0.05em` letter-spacing. Chart labels are `9–11px`
 absolute, because they must hold their size against zoom. Radii are 4px for
 controls, 6px for cards. Panel gutters are `0.55–0.6rem`.
 
+## Phones and tablets
+
+Heat Balance Studio and ZEEL follow the same rules and keep the same section in
+their own `docs/design-system.md`, so the suite behaves as one on a small
+screen as well as a large one. This is the tool most likely to be opened on a
+phone: a calc checked in a meeting, or run at someone else's desk.
+
+### The tab layout, below 860px
+
+One screen at a time and a tab bar at the foot:
+
+| Tab | What it shows |
+|---|---|
+| System | The left panel: the walkthrough, the chain, the reference. |
+| Chart | The chart, the full height between header and tab bar. Opens here. |
+| Results | The Results section: state points, duties, totals. |
+| More | Everything else in the right panel, then the footer. |
+
+The tabs are the desk's own panels shown one at a time by `data-tab` on
+`.app-body`, so switching unmounts nothing. 860px is where the desk layout
+already gave up on side-by-side panels. It is written in three places that
+must agree: `COMPACT_LAYOUT` in `ui/useMediaQuery.ts`, the media queries in
+`styles.css`, and this table. `tests/mobile-layout.test.ts` checks the first
+two.
+
+On the Chart tab:
+
+- **One finger pans, two fingers pinch-zoom** (`pinchDomain` in
+  `chart/scales.ts`), as a map does. A drag that starts on a draggable state
+  point moves the point instead; each point has an invisible 44px target on a
+  touch screen.
+- **A tap pins the reading** at that spot in a card, on the half of the chart
+  the tap did not land in. It stays until the next tap or its close button.
+  A tap on a state point selects it instead, and a chip at the top offers
+  **Edit ›**, which opens the System tab on it.
+- **The walkthrough is a card docked over the chart**, because every step is
+  about something the chart is showing. It folds down to its step line, and
+  Back and Next stay pinned to its foot. Starting it, or changing step from any
+  tab, opens the Chart tab.
+
+### Tokens and touch
+
+Declared once, in the layout block at the foot of `styles.css`: `--gutter`,
+`--tap` (44px, Apple's 44pt and WCAG 2.5.5 AAA), `--field-font-touch` (16px,
+below which iOS zooms the page when a field takes focus) and
+`--tabbar-height`. Touch rules key on `@media (pointer: coarse)`, never on
+width. `index.html` sets `viewport-fit=cover`, and the header, panels and tab
+bar pad with `env(safe-area-inset-*)`.
+
+### Chart density on a phone
+
+The live chart in the tab layout carries `.compact`:
+
+- larger type (line labels 9→11px, axis text 10→11px),
+- as many dry-bulb ticks as fit, about one per 56px, instead of twelve,
+- **a line's label is dropped when it would land within 28px of one its family
+  already drew.** Every line is still drawn and every family still labelled.
+
+These are scoped to `.psych-chart.compact`, **never to a media query**. The
+export's desk copy is drawn in the same document on the same phone, and a
+media-query rule would restyle it too.
+
+### Exports from a phone
+
+A phone never exports its phone layout. `ExportPanel` calls `beforeExport`
+first, which mounts desk-layout copies of every case off screen at 960 × 680
+(`EXPORT_SIZE` in `App.tsx`), points the export refs at them, and takes them
+down afterwards. The PNG, SVG, both-cases drawing and PDF report all go
+through it. A desk passes nothing and exports its live chart, as it always
+did.
+
+### Checking a layout change
+
+Open the dev server at 360, 375, 390 and 430px wide in a phone emulation with
+touch, check that nothing scrolls sideways, then drive the chart with real
+touch events (a tap, a one-finger drag, a two-finger pinch, a tap on a state
+point). At 1440, 1024 and 900px, compare screenshots with the previous commit.
+They should be pixel-identical.
+
 ## Using this with Claude Design
 
 `/design` produces a multi-artboard canvas as an Artifact. It starts from

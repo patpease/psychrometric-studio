@@ -245,6 +245,38 @@ export function panDomain(
   );
 }
 
+/**
+ * The domain for a two-finger pinch, from where the pinch began.
+ *
+ * Zoom about the condition that was between the fingers when they landed, by
+ * how far they have spread, then pan so that condition is between them again.
+ * One gesture, two effects: fingers moving apart zoom, fingers moving together
+ * pan — which is how every map on the phone already behaves.
+ *
+ * Always measured from the START of the pinch rather than accumulated frame by
+ * frame, for the reason pan is: a batch of pointer events computed against one
+ * stale domain would drop all but the last.
+ *
+ * `startDistance / distance` is the zoom factor, so spreading the fingers (a
+ * growing distance) gives a factor below 1 and zooms in, the same sense as the
+ * wheel.
+ */
+export function pinchDomain(
+  start: ChartDomain,
+  focus: DataPoint,
+  startDistance: number,
+  distance: number,
+  midpoint: PixelPoint,
+  width: number,
+  height: number,
+  limits: ChartDomain,
+): ChartDomain {
+  const factor = distance > 0 && startDistance > 0 ? startDistance / distance : 1;
+  const zoomed = zoomDomain(start, factor, focus, limits);
+  const under = createScales(zoomed, width, height).invert(midpoint.x, midpoint.y);
+  return panDomain(zoomed, focus.tdb - under.tdb, focus.w - under.w, limits);
+}
+
 /* -------------------------------------------------------------------------- *
  * Axis ticks
  * -------------------------------------------------------------------------- */

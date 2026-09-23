@@ -1,5 +1,7 @@
 /**
- * Chart interaction: hover readout, wheel zoom, and drag pan.
+ * Chart interaction: hover readout, wheel zoom, and drag pan — and on a touch
+ * screen, the same three as a phone's map does them: one finger pans, two
+ * pinch to zoom, and a tap pins the reading at that spot.
  *
  * All three are expressed as changes to the chart *domain* rather than as a
  * transform applied over a fixed rendering. That costs a re-tessellation on
@@ -10,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createScales,
   panDomain,
+  pinchDomain,
   zoomDomain,
   type ChartDomain,
   type DataPoint,
@@ -44,8 +47,16 @@ export interface ChartInteraction {
   onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onPointerLeave: () => void;
+  onPointerCancel: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerLeave: (event: React.PointerEvent<HTMLDivElement>) => void;
+  /** Clear a reading pinned by a tap. */
+  clearHover: () => void;
 }
+
+/** A touch that travels further than this is a pan, not a tap. */
+const TAP_SLOP = 8;
+/** And one held longer than this is a press, not a tap. */
+const TAP_MS = 500;
 
 export function useChartInteraction({
   domain,
@@ -60,6 +71,15 @@ export function useChartInteraction({
   const [hover, setHover] = useState<MoistAirState | null>(null);
   const [panning, setPanning] = useState(false);
   const dragOrigin = useRef<{ point: DataPoint; domain: ChartDomain } | null>(null);
+
+  /*
+   * Touch state. A mouse has one pointer and a hover; a hand has several
+   * pointers and none, so the readout cannot follow a finger that is also
+   * panning. It is pinned by a tap instead and stays until the next one.
+   */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ domain: ChartDomain; focus: DataPoint; distance: number } | null>(null);
+  const tap = useRef<{ x: number; y: number; at: number; moved: boolean; onPoint?: boolean } | null>(null);
 
   // Kept in refs so the non-passive wheel listener below always sees current
   // values without being torn down and rebuilt on every domain change.
@@ -80,8 +100,62 @@ export function useChartInteraction({
     [],
   );
 
+  /**
+   * The air at a pointer, or null off the chart or above saturation — where
+   * there is no air to describe, and a clamped state would report properties
+   * for a condition the pointer is not actually over.
+   */
+  const stateAt = useCallback(
+    (event: { clientX: number; clientY: number }): MoistAirState | null => {
+      const point = pointerToData(event);
+      if (!point) return null;
+      const wSat = saturationHumidityRatio(point.tdb, pressure, units);
+      if (point.w > wSat || point.w < 0) return null;
+      try {
+        return solveState(point.tdb, point.w, pressure, units);
+      } catch {
+        return null;
+      }
+    },
+    [pointerToData, pressure, units],
+  );
+
+  /** Two touches' separation and midpoint, the midpoint relative to the chart. */
+  const spread = useCallback(() => {
+    const [a, b] = [...touches.current.values()];
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!a || !b || !rect) return null;
+    return {
+      distance: Math.hypot(a.x - b.x, a.y - b.y),
+      mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top },
+    };
+  }, []);
+
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === 'touch') {
+        if (!touches.current.has(event.pointerId)) return;
+        touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        const pinching = pinch.current;
+        if (pinching && touches.current.size >= 2) {
+          const now = spread();
+          if (!now) return;
+          const { limits: limitsNow, width: w, height: h } = latest.current;
+          latest.current.onDomainChange(() =>
+            pinchDomain(pinching.domain, pinching.focus, pinching.distance, now.distance, now.mid, w, h, limitsNow),
+          );
+          return;
+        }
+
+        const started = tap.current;
+        if (started && Math.hypot(event.clientX - started.x, event.clientY - started.y) > TAP_SLOP) {
+          started.moved = true;
+        }
+        // Falls through to the pan below. A finger has no hover to update.
+        if (!dragOrigin.current || !started?.moved) return;
+      }
+
       const drag = dragOrigin.current;
 
       if (drag) {
@@ -103,52 +177,144 @@ export function useChartInteraction({
         return;
       }
 
-      const point = pointerToData(event);
-      if (!point) {
-        setHover(null);
-        return;
-      }
-
-      // Above the saturation curve there is no air to describe. Reporting a
-      // clamped state here would silently show properties for a condition the
-      // cursor is not actually over.
-      const wSat = saturationHumidityRatio(point.tdb, pressure, units);
-      if (point.w > wSat || point.w < 0) {
-        setHover(null);
-        return;
-      }
-
-      try {
-        setHover(solveState(point.tdb, point.w, pressure, units));
-      } catch {
-        setHover(null);
-      }
+      setHover(stateAt(event));
     },
-    [pointerToData, pressure, units],
+    [stateAt, spread],
   );
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === 'touch') {
+        // No explicit capture. A touch is already captured to whatever it
+        // landed on, and its moves still bubble here; capturing it to the pane
+        // instead retargets the click, so a tap on a state point would select
+        // nothing.
+        touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (touches.current.size === 2) {
+          // A second finger turns a pan into a pinch, and is never a tap.
+          tap.current = null;
+          dragOrigin.current = null;
+          const now = spread();
+          const scales = createScales(latest.current.domain, latest.current.width, latest.current.height);
+          if (now) {
+            pinch.current = {
+              domain: latest.current.domain,
+              focus: scales.invert(now.mid.x, now.mid.y),
+              distance: now.distance,
+            };
+          }
+          return;
+        }
+        if (touches.current.size > 2) return;
+
+        tap.current = {
+          x: event.clientX,
+          y: event.clientY,
+          at: Date.now(),
+          moved: false,
+          // A tap on a state point selects it (ProcessOverlay's click); it is
+          // not also a request to read the air there.
+          onPoint: event.target instanceof Element && event.target.closest('.process-point') !== null,
+        };
+        const point = pointerToData(event);
+        if (point) {
+          dragOrigin.current = { point, domain: latest.current.domain };
+          setPanning(true);
+        }
+        return;
+      }
+
       const point = pointerToData(event);
       if (!point) return;
       event.currentTarget.setPointerCapture(event.pointerId);
       dragOrigin.current = { point, domain: latest.current.domain };
       setPanning(true);
     },
-    [pointerToData],
+    [pointerToData, spread],
   );
 
-  const onPointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+  const release = (event: React.PointerEvent<HTMLDivElement>): void => {
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      /* nothing to release */
     }
-    dragOrigin.current = null;
-    setPanning(false);
+  };
+
+  const endTouch = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+      const started = tap.current;
+      const wasTap =
+        !cancelled &&
+        started !== null &&
+        !started.moved &&
+        touches.current.size === 1 &&
+        Date.now() - started.at < TAP_MS;
+
+      touches.current.delete(event.pointerId);
+      release(event);
+
+      // A tap pins the reading where it landed, or clears it when it landed
+      // somewhere with no air to describe.
+      if (wasTap && !started.onPoint) setHover(stateAt(event));
+
+      if (touches.current.size === 1) {
+        // One finger lifted from a pinch: the other carries on as a pan from
+        // wherever it is now, rather than jumping back to where it started.
+        pinch.current = null;
+        const [remaining] = [...touches.current.values()];
+        const point = remaining ? pointerToData({ clientX: remaining.x, clientY: remaining.y }) : null;
+        dragOrigin.current = point ? { point, domain: latest.current.domain } : null;
+        // Already moving, so lifting it later is the end of a pan, not a tap.
+        tap.current = remaining ? { ...remaining, at: 0, moved: true } : null;
+        return;
+      }
+      if (touches.current.size === 0) {
+        pinch.current = null;
+        tap.current = null;
+        dragOrigin.current = null;
+        setPanning(false);
+      }
+    },
+    [pointerToData, stateAt],
+  );
+
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === 'touch') {
+        endTouch(event, false);
+        return;
+      }
+      release(event);
+      dragOrigin.current = null;
+      setPanning(false);
+    },
+    [endTouch],
+  );
+
+  const onPointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === 'touch') {
+        endTouch(event, true);
+        return;
+      }
+      release(event);
+      dragOrigin.current = null;
+      setPanning(false);
+    },
+    [endTouch],
+  );
+
+  // A mouse leaving takes its reading with it. A finger always "leaves" when
+  // it lifts, and a reading pinned by a tap has to outlive that.
+  const onPointerLeave = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'touch') setHover(null);
   }, []);
 
-  const onPointerLeave = useCallback(() => {
-    setHover(null);
-  }, []);
+  const clearHover = useCallback(() => setHover(null), []);
 
   /**
    * Discard the hover state when the unit system or site pressure changes.
@@ -205,6 +371,8 @@ export function useChartInteraction({
     onPointerMove,
     onPointerDown,
     onPointerUp,
+    onPointerCancel,
     onPointerLeave,
+    clearHover,
   };
 }

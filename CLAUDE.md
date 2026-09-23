@@ -139,6 +139,25 @@ the failure shapes this codebase produces.
   top of the chain that is there. It now runs on the cooling case by role,
   snapshots what it covered, and puts it back on exit.
 
+## Phones
+
+Below 860px the tool is a tab bar and one screen at a time (System · Chart ·
+Results · More). On the chart one finger pans, two pinch, a tap pins the
+reading, and the walkthrough docks over the chart as a card.
+`docs/design-system.md` has the rules. Three traps, all invisible on a desk:
+
+- **A phone rule declared before the desk rule it overrides loses.** The old
+  stacked layout set `.panel { width: 100% }` above `.panel-left { width:
+  21.5rem }`, so every panel stayed at its desk width on a phone.
+  `tests/mobile-layout.test.ts` pins the order.
+- **Capturing a touch pointer on the chart pane retargets the click.** The
+  pane captures a mouse to pan; doing the same for a finger sent the tap's
+  click to the pane, and tapping a state point selected nothing. A touch is
+  already captured to what it landed on, and its moves still bubble.
+- **Phone chart styles live on `.psych-chart.compact`, never in a media
+  query.** A phone exports from a desk-layout copy drawn in the same document,
+  and a media query would restyle that too.
+
 ## Regenerated files
 
 `npm run build` regenerates `src/icons/generated.ts` and the third-party
